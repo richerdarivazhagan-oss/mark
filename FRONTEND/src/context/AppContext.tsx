@@ -18,8 +18,8 @@ import {
   Circular,
   CircularStatus,
   PeriodTiming,
-  StaffOrder,
   StaffDayOrder,
+  DayOrderEntry,
   BonafideRequest,
   BonafideStatus
 } from '../types';
@@ -107,6 +107,7 @@ interface AppContextType {
 
   saveTimetableSlot: (slot: TimetableSlot) => void;
   deleteTimetableSlot: (id: string) => void;
+  replaceFacultyTimetable: (saved: TimetableSlot[], deleted: string[]) => void;
   savePeriodTimes: (timings: PeriodTiming[]) => void;
   getPeriodTime: (periodNumber: number) => { start: string; end: string } | undefined;
 
@@ -124,11 +125,7 @@ interface AppContextType {
   addCalendarEvent: (event: Omit<CalendarEvent, 'id'>) => void;
   updateCalendarEvent: (event: CalendarEvent) => void;
   deleteCalendarEvent: (id: string) => void;
-
-  staffOrders: StaffOrder[];
-  addStaffOrder: (order: Omit<StaffOrder, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  updateStaffOrder: (order: StaffOrder) => void;
-  deleteStaffOrder: (id: string) => void;
+  syncStaffDayOrderToCalendar: (entries: DayOrderEntry[]) => void;
 
   staffDayOrders: StaffDayOrder[];
   saveStaffDayOrder: (data: Omit<StaffDayOrder, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -153,11 +150,13 @@ interface AppContextType {
   reviewBonafideRequest: (
     id: string,
     stage: 'faculty' | 'hod' | 'principal',
-    status: 'approve' | 'recommend' | 'reject',
+    status: 'approve' | 'recommend' | 'reject' | 'open',
     actorId: string,
     actorName: string,
     comment?: string
   ) => void;
+  deleteBonafideRequest: (id: string) => void;
+  canDeleteBonafideRequest: (request: BonafideRequest) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -193,13 +192,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return mockSubstitutionRequests;
     }
   });
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(mockCalendarEvents);
-  const [staffOrders, setStaffOrders] = useState<StaffOrder[]>(() => {
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => {
     try {
-      const saved = localStorage.getItem('smart_att_staff_orders');
-      return saved ? JSON.parse(saved) : [];
+      const saved = localStorage.getItem('smart_att_calendar_events');
+      return saved ? JSON.parse(saved) : mockCalendarEvents;
     } catch {
-      return [];
+      return mockCalendarEvents;
     }
   });
   const [staffDayOrders, setStaffDayOrders] = useState<StaffDayOrder[]>(() => {
@@ -333,6 +331,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('smart_att_notifications', JSON.stringify(notifications));
   }, [notifications]);
 
+  useEffect(() => {
+    localStorage.setItem('smart_att_calendar_events', JSON.stringify(calendarEvents));
+  }, [calendarEvents]);
+
   const addToast = (title: string, message?: string, type: 'success' | 'danger' | 'warning' | 'info' = 'info') => {
     const id = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
     setToasts((prev) => [...prev, { id, title, message, type }]);
@@ -362,6 +364,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       batch: studentRecord.batch,
       departmentId: studentRecord.departmentId,
       departmentName: studentRecord.departmentName,
+      programme: studentRecord.programme,
+      year: studentRecord.year,
+      shift: studentRecord.shift,
       guardianName: studentRecord.guardianName,
       guardianPhone: studentRecord.guardianPhone,
       phone: studentRecord.phone || target.phone,
@@ -559,6 +564,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTimetable((prev) => prev.filter((s) => s.id !== id));
     logAudit('DELETE_TIMETABLE_SLOT', 'Timetable Builder', `Removed slot ID ${id}`);
     addToast('Slot Removed', 'Timetable slot cleared', 'warning');
+  };
+
+  const replaceFacultyTimetable = (saved: TimetableSlot[], deleted: string[]) => {
+    setTimetable((prev) => {
+      const deleteSet = new Set(deleted);
+      const kept = prev.filter((s) => !deleteSet.has(s.id));
+      const savedIds = new Set(saved.map((s) => s.id));
+      const base = kept.filter((s) => !savedIds.has(s.id));
+      return [...base, ...saved];
+    });
+    logAudit('SAVE_TIMETABLE', 'Timetable Builder', `Replaced faculty timetable (${saved.length} saved, ${deleted.length} removed)`);
+    addToast('Timetable Updated', `Faculty timetable saved (${saved.length} entries).`, 'success');
   };
 
   const savePeriodTimes = (timings: PeriodTiming[]) => {
@@ -838,31 +855,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Event Removed', 'Calendar event deleted', 'info');
   };
 
-  // Monthly Staff Orders
-  useEffect(() => {
-    localStorage.setItem('smart_att_staff_orders', JSON.stringify(staffOrders));
-  }, [staffOrders]);
+  // Sync staff day order entries → calendar events.
+  // Called automatically after saving a monthly staff day order schedule.
+  // Each date may produce a holiday event and/or a working (day order) event.
+  // Only creates/updates events for the given entries; does not touch unrelated events.
+  const syncStaffDayOrderToCalendar = (entries: DayOrderEntry[]) => {
+    setCalendarEvents((prev) => {
+      const next = [...prev];
+      const upsert = (date: string, type: 'holiday' | 'working', title: string, description: string, dayOrder?: number) => {
+        const existingIdx = next.findIndex((e) => e.date === date && e.type === type);
+        const ev: CalendarEvent = {
+          id: existingIdx >= 0 ? next[existingIdx].id : 'cal-sync-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          date,
+          type,
+          title,
+          description,
+          dayOrder,
+        };
+        if (existingIdx >= 0) {
+          next[existingIdx] = ev;
+        } else {
+          next.push(ev);
+        }
+      };
 
-  const addStaffOrder = (order: Omit<StaffOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString().slice(0, 10);
-    const newOrder: StaffOrder = { ...order, id: 'so-' + Date.now(), createdAt: now, updatedAt: now };
-    setStaffOrders((prev) => [newOrder, ...prev]);
-    addToast('Staff Order Created', `Monthly staff order for ${order.month} created`, 'success');
+      for (const entry of entries) {
+        if (entry.isHoliday) {
+          // Holiday event — same date may also carry a day order below.
+          upsert(
+            entry.date,
+            'holiday',
+            entry.holidayTitle || 'Holiday',
+            'Synced from Day Order'
+          );
+        }
+        if (entry.dayOrder != null) {
+          upsert(
+            entry.date,
+            'working',
+            `Day Order ${entry.dayOrder}`,
+            'Synced from Day Order',
+            entry.dayOrder
+          );
+        }
+      }
+      return next;
+    });
   };
 
-  const updateStaffOrder = (order: StaffOrder) => {
-    const now = new Date().toISOString().slice(0, 10);
-    const updated = { ...order, updatedAt: now };
-    setStaffOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
-    addToast('Staff Order Updated', `Monthly staff order for ${order.month} updated`, 'success');
-  };
-
-  const deleteStaffOrder = (id: string) => {
-    setStaffOrders((prev) => prev.filter((o) => o.id !== id));
-    addToast('Staff Order Deleted', 'Monthly staff order removed', 'info');
-  };
-
-  // Monthly Staff Day Order (OCR-extracted date → day order mapping)
+  // Day Order (OCR-extracted date → day order mapping)
   useEffect(() => {
     localStorage.setItem('smart_att_staff_day_orders', JSON.stringify(staffDayOrders));
   }, [staffDayOrders]);
@@ -870,7 +911,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const saveStaffDayOrder = (data: Omit<StaffDayOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const trimmedEntries = data.entries
-      .map((e) => ({ date: e.date, dayOrder: Number(e.dayOrder) || 1 }))
+      .map((e) => ({ date: e.date, dayOrder: Number(e.dayOrder) >= 1 ? Number(e.dayOrder) : undefined, isHoliday: !!e.isHoliday, holidayTitle: e.isHoliday ? e.holidayTitle : undefined }))
       .sort((a, b) => (a.date < b.date ? -1 : 1));
     setStaffDayOrders((prev) => {
       const existing = prev.find((o) => o.month === data.month);
@@ -885,12 +926,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return [{ ...record, id: 'sdo-' + Date.now() }, ...prev];
     });
-    logAudit('SAVE_STAFF_DAY_ORDER', 'Monthly Staff Day Order', `Saved ${trimmedEntries.length} day order entries for ${data.month}`);
+    syncStaffDayOrderToCalendar(trimmedEntries);
+    logAudit('SAVE_STAFF_DAY_ORDER', 'Day Order', `Saved ${trimmedEntries.length} day order entries for ${data.month}`);
     addToast('Day Order Saved', `Saved ${trimmedEntries.length} dated day order entries (${data.month})`, 'success');
   };
 
   const updateStaffDayOrder = (data: StaffDayOrder) => {
     setStaffDayOrders((prev) => prev.map((o) => (o.id === data.id ? { ...data, updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19) } : o)));
+    syncStaffDayOrderToCalendar(data.entries);
     addToast('Day Order Updated', `Updated staff day order for ${data.month}`, 'success');
   };
 
@@ -972,7 +1015,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setCirculars((prev) => [newCircular, ...prev]);
     logAudit('CREATE_CIRCULAR', 'Circulars', `Created circular: ${newCircular.title}`);
-    addToast('Circular Created', `"${newCircular.title}" saved as draft`, 'success');
+    // Deliberately no "Circular Created" toast here: publishing a circular should
+    // surface only a single "Circular Published" notification.
     return newCircular;
   };
 
@@ -1105,7 +1149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const reviewBonafideRequest = (
     id: string,
     stage: 'faculty' | 'hod' | 'principal',
-    status: 'approve' | 'recommend' | 'reject',
+    status: 'approve' | 'recommend' | 'reject' | 'open',
     actorId: string,
     actorName: string,
     comment?: string
@@ -1119,13 +1163,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         target = b;
 
         if (stage === 'faculty') {
+          if (status === 'open') {
+            // Faculty opens/reviews the request → locks it (student can no longer delete)
+            // and moves it to a distinct "Faculty Reviewed" state.
+            return {
+              ...b,
+              status: 'faculty_reviewed' as BonafideStatus,
+              facultyReviewed: true,
+              facultyReviewedAt: now,
+              facultyId: actorId,
+              facultyName: actorName,
+              updatedAt: now
+            };
+          }
           if (status === 'reject') {
-            return { ...b, status: 'submitted' as BonafideStatus, updatedAt: now, facultyComment: comment };
+            // Faculty rejects → terminal "Rejected" state (student can never delete).
+            return {
+              ...b,
+              status: 'rejected' as BonafideStatus,
+              facultyReviewed: true,
+              facultyReviewedAt: now || b.facultyReviewedAt,
+              facultyId: actorId,
+              facultyName: actorName,
+              facultyComment: comment,
+              updatedAt: now
+            };
           }
           // Faculty recommends → forwards to HOD
           return {
             ...b,
             status: 'faculty_recommended' as BonafideStatus,
+            facultyReviewed: true,
+            facultyReviewedAt: now || b.facultyReviewedAt,
             facultyId: actorId,
             facultyName: actorName,
             facultyRecommendedAt: now,
@@ -1179,7 +1248,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (target) {
       if (stage === 'faculty') {
-        if (status === 'recommend') {
+        if (status === 'open') {
+          pushNotification(
+            'Bonafide Under Review',
+            `${actorName} opened your bonafide request for review. The request can no longer be cancelled.`,
+            'student',
+            { semester: target.semester, section: target.section },
+            'info',
+            'student_bonafide'
+          );
+        } else if (status === 'recommend') {
           pushNotification(
             'Bonafide Recommended',
             `${actorName} recommended your bonafide request — forwarded to HOD.`,
@@ -1198,11 +1276,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           );
         } else {
           pushNotification(
-            'Bonafide Returned',
-            `${actorName} returned your bonafide request for corrections.`,
+            'Bonafide Rejected',
+            `${actorName} rejected your bonafide request.`,
             'student',
             { semester: target.semester, section: target.section },
-            'warning',
+            'danger',
             'student_bonafide'
           );
         }
@@ -1260,12 +1338,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       logAudit('REVIEW_BONAFIDE', 'Bonafide Certificate', `Bonafide ${id} ${status} by ${stage.toUpperCase()} (${actorName})`);
-      addToast(
-        'Bonafide Updated',
-        `${stage.charAt(0).toUpperCase() + stage.slice(1)} marked request as ${status}`,
-        status === 'reject' ? 'warning' : 'success'
-      );
+      const toastTitle = status === 'open' ? 'Bonafide Under Review' : 'Bonafide Updated';
+      const toastMsg =
+        status === 'open'
+          ? 'Faculty opened the request for review. The student can no longer cancel it.'
+          : `${stage.charAt(0).toUpperCase() + stage.slice(1)} marked request as ${status}`;
+      addToast(toastTitle, toastMsg, status === 'reject' ? 'warning' : 'success');
     }
+  };
+
+  const canDeleteBonafideRequest = (request: BonafideRequest): boolean =>
+    !!request &&
+    request.status === 'submitted' &&
+    request.facultyReviewed !== true;
+
+  const deleteBonafideRequest = (id: string) => {
+    const target = bonafideRequests.find((r) => r.id === id);
+    if (!target) {
+      addToast('Bonafide Request Not Found', 'The request no longer exists', 'danger');
+      return;
+    }
+    if (!canDeleteBonafideRequest(target)) {
+      addToast(
+        'Cannot Delete Request',
+        'This request has already been reviewed and can no longer be deleted.',
+        'warning'
+      );
+      return;
+    }
+    setBonafideRequests((prev) => prev.filter((r) => r.id !== id));
+    logAudit('DELETE_BONAFIDE', 'Bonafide Certificate', `Bonafide request ${id} deleted by ${target.studentName}`);
+    addToast('Bonafide Request Deleted', 'Bonafide request deleted successfully.', 'success');
   };
 
   return (
@@ -1285,7 +1388,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         correctionRequests,
         substitutionRequests,
         calendarEvents,
-        staffOrders,
         staffDayOrders,
         auditLogs,
         backups,
@@ -1326,6 +1428,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         saveTimetableSlot,
         deleteTimetableSlot,
+        replaceFacultyTimetable,
         savePeriodTimes,
         getPeriodTime,
 
@@ -1343,9 +1446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addCalendarEvent,
         updateCalendarEvent,
         deleteCalendarEvent,
-        addStaffOrder,
-        updateStaffOrder,
-        deleteStaffOrder,
+        syncStaffDayOrderToCalendar,
         saveStaffDayOrder,
         updateStaffDayOrder,
         deleteStaffDayOrder,
@@ -1365,7 +1466,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         bonafideRequests,
         submitBonafideRequest,
-        reviewBonafideRequest
+        reviewBonafideRequest,
+        deleteBonafideRequest,
+        canDeleteBonafideRequest
       }}
     >
       {children}

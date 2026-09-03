@@ -46,30 +46,30 @@ export const StudentTimetable: React.FC = () => {
     <div className="space-y-6">
       <BackButton label="Back to Dashboard" />
 
-      <div className="pb-2 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+      <div className="pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
+        <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight">
           Weekly Class Lecture Timetable
         </h2>
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <span className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider rounded-lg bg-[#1E40AF]/10 dark:bg-[#2563EB]/40 text-[#1E40AF] dark:text-[#3B82F6]">
+          <span className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider rounded-lg bg-[#2563EB]/10 dark:bg-[#2563EB]/40 text-[#2563EB] dark:text-[#3B82F6]">
             {academicYearLabel(currentUser.semester || 4)}
           </span>
-          <span className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+          <span className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider rounded-lg bg-[#F7F9FC] dark:bg-zinc-800 text-[#1E293B] dark:text-zinc-300">
             Section {currentUser.section || 'A'}
           </span>
         </div>
 
         {/* Day Order selector */}
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-            <ListOrdered className="w-3.5 h-3.5 text-[#1E40AF] dark:text-[#3B82F6]" /> Day Order
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#000000] dark:text-[#64748B] flex items-center gap-1">
+            <ListOrdered className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#3B82F6]" /> Day Order
           </span>
           <button
             onClick={() => setViewOrder('all')}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors border ${
               viewOrder === 'all'
-                ? 'bg-[#1E40AF] text-white dark:bg-[#2563EB] border-[#1E40AF]'
-                : 'bg-zinc-50 dark:bg-[#0A0A0A] text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-[#232326] hover:border-[#3B82F6]'
+                ? 'bg-[#2563EB] text-white dark:bg-[#2563EB] border-[#2563EB]'
+                : 'bg-[#F7F9FC] dark:bg-[#0A0A0A] text-[#1E293B] dark:text-zinc-300 border-[#E2E8F0] dark:border-[#232326] hover:border-[#3B82F6]'
             }`}
           >
             All Days
@@ -80,8 +80,8 @@ export const StudentTimetable: React.FC = () => {
               onClick={() => setViewOrder(doNum)}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors border ${
                 viewOrder === doNum
-                  ? 'bg-[#1E40AF] text-white dark:bg-[#2563EB] border-[#1E40AF]'
-                  : 'bg-zinc-50 dark:bg-[#0A0A0A] text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-[#232326] hover:border-[#3B82F6]'
+                  ? 'bg-[#2563EB] text-white dark:bg-[#2563EB] border-[#2563EB]'
+                  : 'bg-[#F7F9FC] dark:bg-[#0A0A0A] text-[#1E293B] dark:text-zinc-300 border-[#E2E8F0] dark:border-[#232326] hover:border-[#3B82F6]'
               }`}
             >
               Day Order {doNum}
@@ -100,16 +100,16 @@ export const StudentTimetable: React.FC = () => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-[#0A0A0A] border border-zinc-200/80 dark:border-[#232326] rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0]/80 dark:border-[#232326] rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-center text-xs border-collapse">
             <thead>
-              <tr className="bg-zinc-50 dark:bg-[#0A0A0A] border-b border-zinc-200 dark:border-[#232326] text-zinc-500 font-semibold uppercase tracking-wider">
+              <tr className="bg-[#F7F9FC] dark:bg-[#0A0A0A] border-b border-[#E2E8F0] dark:border-[#232326] text-[#000000] dark:text-[#64748B] font-semibold uppercase tracking-wider">
                 <th className="p-3 w-24 text-left pl-4">Slot</th>
                 {periods.map((p) => (
-                  <th key={p.num} className="p-3 border-l border-zinc-200 dark:border-[#232326]">
-                    <span className="block text-zinc-900 dark:text-zinc-100">P{p.num}</span>
-                    <span className="block text-zinc-400 dark:text-zinc-500 font-medium normal-case mt-1">
+                  <th key={p.num} className="p-3 border-l border-[#E2E8F0] dark:border-[#232326]">
+                    <span className="block text-[#0F172A] dark:text-zinc-100">P{p.num}</span>
+                    <span className="block text-[#000000] dark:text-[#64748B] dark:text-zinc-500 font-medium normal-case mt-1">
                       {p.start} – {p.end}
                     </span>
                   </th>
@@ -119,24 +119,24 @@ export const StudentTimetable: React.FC = () => {
             <tbody className="divide-y divide-zinc-200 dark:divide-[#232326]">
               {rowLabels.map(({ label, day }) => (
                 <tr key={label}>
-                  <td className="p-3 font-bold text-left pl-4 bg-zinc-50/50 dark:bg-[#0A0A0A]/60 text-zinc-900 dark:text-zinc-100 border-r border-zinc-200 dark:border-[#232326]">
+                  <td className="p-3 font-bold text-left pl-4 bg-[#F7F9FC]/50 dark:bg-[#0A0A0A]/60 text-[#0F172A] dark:text-zinc-100 border-r border-[#E2E8F0] dark:border-[#232326]">
                     {label}
                   </td>
                   {periods.map((p) => {
                     const slot = slotForDayOrder(mySlots, day, p.num, resolvedOrder);
                     return (
-                      <td key={p.num} className="p-2 border-l border-zinc-200 dark:border-[#232326] h-16 align-top">
+                      <td key={p.num} className="p-2 border-l border-[#E2E8F0] dark:border-[#232326] h-16 align-top">
                         {slot ? (
-                          <div className="p-2 bg-[#1E40AF]/10 dark:bg-[#2563EB]/50 border border-[#1E40AF]/30 dark:border-[#3B82F6]/40 rounded-xl text-left h-full flex flex-col justify-between">
-                            <span className="font-bold text-[#1E40AF] dark:text-[#3B82F6] text-xs block truncate">
+                          <div className="p-2 bg-[#2563EB]/10 dark:bg-[#2563EB]/50 border border-[#2563EB]/30 dark:border-[#3B82F6]/40 rounded-xl text-left h-full flex flex-col justify-between">
+                            <span className="font-bold text-[#2563EB] dark:text-[#3B82F6] text-xs block truncate">
                               {slot.subjectCode}
                             </span>
-                            <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 truncate">
+                            <span className="text-[9px] font-bold text-[#000000] dark:text-[#64748B] dark:text-zinc-400 truncate">
                               {slot.subjectName}
                             </span>
                           </div>
                         ) : (
-                          <div className="h-full flex items-center justify-center text-zinc-300 dark:text-zinc-700 text-[10px]">
+                          <div className="h-full flex items-center justify-center text-[#000000] dark:text-zinc-700 text-[10px]">
                             —
                           </div>
                         )}

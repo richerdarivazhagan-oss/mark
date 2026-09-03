@@ -47,24 +47,24 @@ export const ForgotPasswordModal: React.FC<{ isOpen: boolean; onClose: () => voi
       {step === 1 && (
         <form onSubmit={handleSendOTP} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">
               Registered Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
+              <Mail className="w-4 h-4 text-[#000000] dark:text-[#64748B] absolute left-3 top-3" />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="user@university.edu"
-                className="w-full pl-9 pr-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1E40AF]"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
             </div>
           </div>
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1E40AF] hover:bg-[#FFFFFF] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
+            className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#2563EB] hover:bg-[#FFFFFF] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             Send OTP Code
             <ArrowRight className="w-4 h-4" />
@@ -74,8 +74,8 @@ export const ForgotPasswordModal: React.FC<{ isOpen: boolean; onClose: () => voi
 
       {step === 2 && (
         <form onSubmit={handleVerifyOTP} className="space-y-4 text-center">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Enter the 4-digit code sent to <strong className="text-zinc-900 dark:text-zinc-100">{email}</strong>
+          <p className="text-xs text-[#000000] dark:text-[#64748B] dark:text-zinc-400">
+            Enter the 4-digit code sent to <strong className="text-[#0F172A] dark:text-zinc-100">{email}</strong>
           </p>
           <div className="flex justify-center gap-3">
             {otp.map((digit, idx) => (
@@ -90,13 +90,13 @@ export const ForgotPasswordModal: React.FC<{ isOpen: boolean; onClose: () => voi
                   newOtp[idx] = val;
                   setOtp(newOtp);
                 }}
-                className="w-12 h-12 text-center font-mono font-bold text-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1E40AF]"
+                className="w-12 h-12 text-center font-mono font-bold text-lg bg-[#F7F9FC] dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
             ))}
           </div>
           <button
             type="submit"
-            className="w-full py-2.5 bg-[#1E40AF] hover:bg-[#FFFFFF] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
+            className="w-full py-2.5 bg-[#2563EB] hover:bg-[#FFFFFF] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             Verify Code
           </button>
@@ -106,11 +106,11 @@ export const ForgotPasswordModal: React.FC<{ isOpen: boolean; onClose: () => voi
       {step === 3 && (
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">
               New Password
             </label>
             <div className="relative">
-              <KeyRound className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
+              <KeyRound className="w-4 h-4 text-[#000000] dark:text-[#64748B] absolute left-3 top-3" />
               <input
                 type="password"
                 required
@@ -118,7 +118,7 @@ export const ForgotPasswordModal: React.FC<{ isOpen: boolean; onClose: () => voi
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢"
-                className="w-full pl-9 pr-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1E40AF]"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
             </div>
           </div>

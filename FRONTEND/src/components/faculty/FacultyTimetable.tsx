@@ -48,34 +48,34 @@ export const FacultyTimetable: React.FC = () => {
   return (
     <div className="space-y-6">
       <BackButton />
-      <div className="pb-2 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+      <div className="pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
+        <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight">
           Personal Lecture Timetable
         </h2>
 
         <div className="flex flex-wrap items-center gap-3 mt-3">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-            <Building2 className="w-3.5 h-3.5 text-[#1E40AF] dark:text-[#3B82F6]" /> Shift
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#000000] dark:text-[#64748B] flex items-center gap-1">
+            <Building2 className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#3B82F6]" /> Shift
           </span>
           <select
             value={shiftFilter}
             onChange={(e) => setShiftFilter(e.target.value)}
-            className="p-2 text-xs font-semibold bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl"
+            className="p-2 text-xs font-semibold bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl"
           >
             <option value="all">All Shifts</option>
             <option value="First Shift">First Shift</option>
             <option value="Second Shift">Second Shift</option>
           </select>
 
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1 ml-2">
-            <ListOrdered className="w-3.5 h-3.5 text-[#1E40AF] dark:text-[#3B82F6]" /> Day Order
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[#000000] dark:text-[#64748B] flex items-center gap-1 ml-2">
+            <ListOrdered className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#3B82F6]" /> Day Order
           </span>
           <button
             onClick={() => setViewOrder('all')}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors border ${
               viewOrder === 'all'
-                ? 'bg-[#1E40AF] text-white dark:bg-[#2563EB] border-[#1E40AF]'
-                : 'bg-zinc-50 dark:bg-[#0A0A0A] text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-[#232326] hover:border-[#3B82F6]'
+                ? 'bg-[#2563EB] text-white dark:bg-[#2563EB] border-[#2563EB]'
+                : 'bg-[#F7F9FC] dark:bg-[#0A0A0A] text-[#1E293B] dark:text-zinc-300 border-[#E2E8F0] dark:border-[#232326] hover:border-[#3B82F6]'
             }`}
           >
             All Days
@@ -86,8 +86,8 @@ export const FacultyTimetable: React.FC = () => {
               onClick={() => setViewOrder(doNum)}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors border ${
                 viewOrder === doNum
-                  ? 'bg-[#1E40AF] text-white dark:bg-[#2563EB] border-[#1E40AF]'
-                  : 'bg-zinc-50 dark:bg-[#0A0A0A] text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-[#232326] hover:border-[#3B82F6]'
+                  ? 'bg-[#2563EB] text-white dark:bg-[#2563EB] border-[#2563EB]'
+                  : 'bg-[#F7F9FC] dark:bg-[#0A0A0A] text-[#1E293B] dark:text-zinc-300 border-[#E2E8F0] dark:border-[#232326] hover:border-[#3B82F6]'
               }`}
             >
               Day Order {doNum}
@@ -106,16 +106,16 @@ export const FacultyTimetable: React.FC = () => {
         )}
       </div>
 
-      <div className="bg-white dark:bg-[#0A0A0A] border border-zinc-200/80 dark:border-[#232326] rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0]/80 dark:border-[#232326] rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-center text-xs border-collapse">
             <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
+              <tr className="bg-[#F7F9FC] dark:bg-zinc-800/60 border-b border-[#E2E8F0] dark:border-zinc-800 text-[#000000] dark:text-[#64748B] dark:text-zinc-400 font-semibold uppercase tracking-wider">
                 <th className="p-3 w-28 text-left pl-4">Day</th>
                 {periods.map((p) => (
-                  <th key={p.num} className="p-3 border-l border-zinc-200 dark:border-zinc-800">
+                  <th key={p.num} className="p-3 border-l border-[#E2E8F0] dark:border-zinc-800">
                     <div>P{p.num}</div>
-                    <div className="text-[9px] text-zinc-400 normal-case font-normal">{p.start} – {p.end}</div>
+                    <div className="text-[9px] text-[#000000] dark:text-[#64748B] normal-case font-normal">{p.start} – {p.end}</div>
                   </th>
                 ))}
               </tr>
@@ -123,24 +123,24 @@ export const FacultyTimetable: React.FC = () => {
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {days.map((day) => (
                 <tr key={day}>
-                  <td className="p-3 font-bold text-left pl-4 bg-zinc-50/50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 border-r border-zinc-200 dark:border-zinc-800">
+                  <td className="p-3 font-bold text-left pl-4 bg-[#F7F9FC]/50 dark:bg-zinc-800/40 text-[#0F172A] dark:text-zinc-100 border-r border-[#E2E8F0] dark:border-zinc-800">
                     {romanDayMap[day]}
                   </td>
                   {periods.map((p) => {
                     const slot = slotForDayOrder(mySlots, day, p.num, resolvedOrder);
                     return (
-                      <td key={p.num} className="p-2 border-l border-zinc-200 dark:border-zinc-800 h-16 align-top">
+                      <td key={p.num} className="p-2 border-l border-[#E2E8F0] dark:border-zinc-800 h-16 align-top">
                         {slot ? (
-                          <div className="p-2 bg-[#1E40AF]/10 dark:bg-[#2563EB]/50 border border-[#1E40AF]/20 dark:border-[#3B82F6]/30 rounded-xl text-left h-full flex flex-col justify-between">
-                            <span className="font-bold text-[#1E40AF] dark:text-[#3B82F6] text-xs truncate">
+                          <div className="p-2 bg-[#2563EB]/10 dark:bg-[#2563EB]/50 border border-[#2563EB]/20 dark:border-[#3B82F6]/30 rounded-xl text-left h-full flex flex-col justify-between">
+                            <span className="font-bold text-[#2563EB] dark:text-[#3B82F6] text-xs truncate">
                               {slot.subjectCode}
                             </span>
-                            <span className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400">
+                            <span className="text-[9px] font-bold text-[#000000] dark:text-[#64748B] dark:text-zinc-400">
                               {academicYear(slot.semester)} · {slot.shift || 'First Shift'}
                             </span>
                           </div>
                         ) : (
-                          <div className="h-full flex items-center justify-center text-zinc-300 dark:text-zinc-700 text-[10px]">
+                          <div className="h-full flex items-center justify-center text-[#000000] dark:text-zinc-700 text-[10px]">
                             —
                           </div>
                         )}

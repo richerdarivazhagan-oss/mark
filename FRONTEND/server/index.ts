@@ -19,7 +19,7 @@ import {
   syncAccountFor,
   unsyncAccountFor
 } from './db.ts';
-import type { User } from '../src/types/index.ts';
+import type { User, BonafideRequest } from '../src/types/index.ts';
 
 const app = express();
 app.use(cors());
@@ -43,7 +43,8 @@ const COLLECTIONS = [
   'auditLogs',
   'backups',
   'notifications',
-  'circulars'
+  'circulars',
+  'bonafideRequests'
 ];
 
 function logAudit(user: User | undefined, action: string, module: string, details: string) {
@@ -134,6 +135,34 @@ app.get('/api/bootstrap', auth, (req, res) => {
 });
 
 // ---------- Generic data API ----------
+
+// Programme -> Department -> Year -> Shift master rules, enforced server-side for
+// student records so invalid combinations (UG+IT, PG+III YEAR, PG+Second Shift)
+// are rejected regardless of the client. Returns an error string or null.
+function masterStructureErrorFor(item: any): string | null {
+  if (!item || (Array.isArray(item) && item.length === 0)) return null;
+  const rows = Array.isArray(item) ? item : [item];
+  for (const s of rows) {
+    if (!s || typeof s !== 'object') continue;
+    const prog = s.programme;
+    const dept = s.departmentId;
+    const year = s.year;
+    const shift = s.shift;
+    if (!prog) continue; // legacy records without explicit fields are allowed
+
+    if (prog === 'UG' && dept === 'dept-it') {
+      return 'Invalid combination: UG programme does not allow INFORMATION & TECHNOLOGY (IT) department.';
+    }
+    if (prog === 'PG' && year === 'III YEAR') {
+      return 'Invalid combination: PG programme does not allow III YEAR.';
+    }
+    if (prog === 'PG' && shift === 'Second Shift') {
+      return 'Invalid combination: PG programme only allows First Shift.';
+    }
+  }
+  return null;
+}
+
 app.post('/api/data/:key/upsert', auth, (req, res) => {
   const { key } = req.params;
   if (!COLLECTIONS.includes(key)) {
@@ -144,6 +173,13 @@ app.post('/api/data/:key/upsert', auth, (req, res) => {
   if (!item || !item.id) {
     res.status(400).json({ error: 'Body must include an item with an id' });
     return;
+  }
+  if (key === 'students') {
+    const err = masterStructureErrorFor(item);
+    if (err) {
+      res.status(422).json({ error: err });
+      return;
+    }
   }
   let existingId = getRow(key, item.id) ? item.id : undefined;
   if (!existingId) {
@@ -174,6 +210,13 @@ app.post('/api/data/:key/import', auth, (req, res) => {
     res.status(400).json({ error: 'Body must include items array' });
     return;
   }
+  if (key === 'students') {
+    const err = masterStructureErrorFor(items);
+    if (err) {
+      res.status(422).json({ error: err });
+      return;
+    }
+  }
   insertMany(key, items);
   for (const item of items) syncAccountFor(key, item);
   handleAudit(currentUser(req), req.body || {});
@@ -184,6 +227,30 @@ app.delete('/api/data/:key/:id', auth, (req, res) => {
   const { key, id } = req.params;
   if (!COLLECTIONS.includes(key)) {
     res.status(400).json({ error: `Unknown collection: ${key}` });
+    return;
+  }
+  // Bonafide deletions must go through the dedicated, permission-checked endpoint
+  // so that the "pending faculty review" deletion rule is enforced server-side.
+  if (key === 'bonafideRequests') {
+    const user = currentUser(req);
+    const request = getRow(key, id) as BonafideRequest | undefined;
+    if (!request) {
+      res.status(404).json({ error: 'Bonafide request not found' });
+      return;
+    }
+    const canDelete = request.status === 'submitted' && request.facultyReviewed !== true;
+    const isOwner = user && (user.role === 'admin' || (user.role === 'student' && user.id === request.studentId));
+    if (!isOwner) {
+      res.status(403).json({ error: 'Forbidden: you do not own this bonafide request' });
+      return;
+    }
+    if (!canDelete) {
+      res.status(409).json({ error: 'This bonafide request can no longer be deleted (already reviewed under Faculty review)' });
+      return;
+    }
+    deleteRow(key, id);
+    handleAudit(currentUser(req), req.body || {});
+    res.json({ ok: true });
     return;
   }
   deleteRow(key, id);
