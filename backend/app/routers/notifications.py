@@ -19,6 +19,7 @@ from app.services.audit import create_audit_log
 router = APIRouter()
 
 
+@router.get("", response_model=list[AppNotificationRead])
 @router.get("/", response_model=list[AppNotificationRead])
 async def list_notifications(
     unread_only: bool = False,

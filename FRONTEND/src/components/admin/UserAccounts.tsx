@@ -46,12 +46,9 @@ export const UserAccounts: React.FC = () => {
     addToast('Password Reset Link Sent', `Temporary password sent to ${userName}`, 'info');
   };
 
-  const filtered = userList.filter(
-    (u) =>
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = searchTerm.trim()
+    ? rankedSearch(userList, searchTerm, [(u) => u.name, (u) => u.email, (u) => u.role])
+    : userList;
 
   return (
     <div className="space-y-6">

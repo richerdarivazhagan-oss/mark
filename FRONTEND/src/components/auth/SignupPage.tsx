@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
 import { Camera } from 'lucide-react';
 import './login.css';
 
@@ -32,7 +33,7 @@ export const SignupPage: React.FC<{ onNavigateToLogin: () => void }> = ({ onNavi
   React.useEffect(() => {
     const fetchDepts = async () => {
       try {
-        const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/+$/, '');
+        const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api').replace(/\/+$/, '');
         const res = await fetch(`${API_BASE}/auth/departments`);
         if (res.ok) {
           const data = await res.json();
@@ -62,7 +63,25 @@ export const SignupPage: React.FC<{ onNavigateToLogin: () => void }> = ({ onNavi
     
     setIsLoading(true);
     try {
-      const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/+$/, '');
+      if (isSupabaseConfigured) {
+        const userEmail = formData.email || `${formData.username}@college.edu`;
+        try {
+          await supabase.auth.signUp({
+            email: userEmail,
+            password: formData.password,
+            options: {
+              data: {
+                name: formData.name,
+                username: formData.username,
+              },
+            },
+          });
+        } catch (sbErr) {
+          console.warn('Supabase auth signup notice:', sbErr);
+        }
+      }
+
+      const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api').replace(/\/+$/, '');
       const res = await fetch(`${API_BASE}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

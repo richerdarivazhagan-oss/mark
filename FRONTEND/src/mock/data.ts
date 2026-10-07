@@ -14,7 +14,9 @@ import {
   BackupSnapshot,
   AppNotification,
   Circular,
-  PeriodTiming
+  PeriodTiming,
+  StaffDayOrder,
+  DayOrderEntry
 } from '../types';
 
 export const mockPeriodTimes: PeriodTiming[] = [
@@ -681,7 +683,7 @@ export const mockSubstitutionRequests: SubstitutionRequest[] = [
 export const mockCalendarEvents: CalendarEvent[] = [
   { id: 'cal-1', date: '2026-08-15', type: 'holiday', title: 'Independence Day', description: 'National Holiday' },
   { id: 'cal-2', date: '2026-08-20', type: 'exam', title: 'Mid-Semester Examination Begins', description: 'Sem 4 Midterms' },
-  { id: 'cal-3', date: '2026-08-25', type: 'working', title: 'Special Working Saturday', description: 'Compensation for fest day' }
+  { id: 'cal-3', date: '2026-08-25', type: 'working', title: 'Special Working Saturday', description: 'Compensation for fest day' },
 ];
 
 export const mockAuditLogs: AuditLog[] = [
@@ -744,17 +746,7 @@ export const mockNotifications: AppNotification[] = [
   }
 ];
 
-// Optional seed Day Order data so the auto day-order timetable works out of the box.
-// Entries map specific dates to a Day Order number (1..n) for the current month.
-export const mockStaffDayOrders: {
-  id: string;
-  month: string;
-  title: string;
-  imageUrl: string;
-  entries: { date: string; dayOrder: number }[];
-  createdAt: string;
-  updatedAt: string;
-}[] = [
+export const mockStaffDayOrders: StaffDayOrder[] = [
   {
     id: 'sdo-2026-09',
     month: '2026-09',

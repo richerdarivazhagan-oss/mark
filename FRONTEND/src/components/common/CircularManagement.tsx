@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 export const CircularManagement: React.FC = () => {
- const { currentUser, circulars, addCircular, updateCircular, deleteCircular, departments, subjects, addToast } = useApp();
+ const { currentUser, circulars, addCircular, updateCircular, deleteCircular, publishCircular, departments, subjects, addToast } = useApp();
  const isHod = currentUser.role === 'hod';
  const isFaculty = currentUser.role === 'faculty';
 
@@ -48,7 +48,13 @@ const [formData, setFormData] = useState({
   validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 });
 
- const myCirculars = circulars.filter((c) => c.createdBy === currentUser.id);
+ const myCirculars = circulars.filter((c) =>
+   c.createdBy === currentUser.id ||
+   c.createdBy === currentUser.name ||
+   c.createdByName === currentUser.name ||
+   (c as any).author_id === currentUser.id ||
+   (c as any).author_name === currentUser.name
+ );
 
  const handleCreate = (e: React.FormEvent) => {
  e.preventDefault();
@@ -78,12 +84,7 @@ const [formData, setFormData] = useState({
   };
 
  const handlePublish = (circular: Circular) => {
- updateCircular({
- ...circular,
- status: 'published',
- publishedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
- });
- addToast('Circular Published', `"${circular.title}" is now visible to target audience`, 'success');
+   publishCircular(circular.id, currentUser.name, circular);
  };
 
  const handleDelete = (id: string) => {

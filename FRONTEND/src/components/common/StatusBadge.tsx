@@ -6,7 +6,10 @@ interface StatusBadgeProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
+import { useLanguage } from '../../context/LanguageContext';
+
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
+  const { t } = useLanguage();
   const norm = status.toLowerCase();
 
   let style = 'bg-gray-100 text-gray-700 dark:bg-zinc-800 dark:text-zinc-300 border-gray-200 dark:border-zinc-700';
@@ -65,7 +68,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
   return (
     <span className={`inline-flex items-center rounded-full border ${style} ${sizeClass} tracking-wide whitespace-nowrap transition-colors`}>
       <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5 opacity-80" />
-      {label}
+      {t(label)}
     </span>
   );
 };

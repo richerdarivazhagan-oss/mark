@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Student } from '../../types';
+import { rankedSearch } from '../../utils/searchRank';
 import { academicYearLabel } from '../../services/academicStructure';
 import { StudentDetailModal } from '../common/StudentDetailModal';
 import { BackButton } from '../common/BackButton';
@@ -12,12 +13,9 @@ export const StudentSearch: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-  const filtered = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.regNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.rollNo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = searchTerm.trim()
+    ? rankedSearch(students, searchTerm, [(s) => s.name, (s) => s.regNo, (s) => s.rollNo, (s) => s.email])
+    : students;
 
   return (
     <div className="space-y-6">

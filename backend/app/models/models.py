@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer, ForeignKey, Time, Date, Enum, TypeDecorator
+from sqlalchemy import Column, String, Text, Boolean, DateTime, Integer, ForeignKey, Time, Date, Enum, TypeDecorator, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from datetime import datetime
@@ -116,7 +116,7 @@ class Department(Base):
 
     hod = relationship("User", primaryjoin="Department.hod_user_id == User.id", lazy="selectin")
     subjects = relationship("Subject", back_populates="department", lazy="selectin")
-    users = relationship("User", primaryjoin="User.department_id == Department.id", back_populates="department", lazy="selectin")
+    users = relationship("User", primaryjoin="User.department_id == Department.id", back_populates="department", lazy="select")
 
 
 class AcademicSession(Base):
@@ -146,8 +146,8 @@ class User(Base):
     email = Column(String(255), nullable=True, unique=True)
     name = Column(String(255), nullable=False)
     avatar = Column(Text, nullable=True)
-    role = Column(Enum(UserRole), nullable=False)
-    department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    role = Column(Enum(UserRole), nullable=False, index=True)
+    department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
 
     reg_no = Column(String(50), nullable=True)
     roll_no = Column(String(50), nullable=True)
@@ -179,10 +179,11 @@ class User(Base):
     advising_programme = Column(String(20), nullable=True)
     advising_department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     advising_year = Column(Integer, nullable=True)
+    advising_section = Column(String(20), nullable=True)
     advising_shift = Column(String(20), nullable=True)
 
     is_hod = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True, index=True)
     last_login = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -191,10 +192,10 @@ class User(Base):
     department = relationship("Department", primaryjoin="User.department_id == Department.id", lazy="selectin")
     advising_department = relationship("Department", primaryjoin="User.advising_department_id == Department.id", lazy="selectin")
     faculty_subjects = relationship("FacultySubject", back_populates="faculty", lazy="selectin")
-    timetable_slots = relationship("Timetable", primaryjoin="User.id == Timetable.faculty_id", back_populates="faculty", lazy="selectin")
-    attendance_sessions = relationship("AttendanceSession", primaryjoin="User.id == AttendanceSession.faculty_id", back_populates="faculty", lazy="selectin")
-    audit_logs = relationship("AuditLog", back_populates="user", lazy="selectin")
-    notifications = relationship("Notification", primaryjoin="User.id == Notification.user_id", back_populates="user", lazy="selectin")
+    timetable_slots = relationship("Timetable", primaryjoin="User.id == Timetable.faculty_id", back_populates="faculty", lazy="select")
+    attendance_sessions = relationship("AttendanceSession", primaryjoin="User.id == AttendanceSession.faculty_id", back_populates="faculty", lazy="select")
+    audit_logs = relationship("AuditLog", back_populates="user", lazy="select")
+    notifications = relationship("Notification", primaryjoin="User.id == Notification.user_id", back_populates="user", lazy="select")
 
 
 class OdRequestStatus(str, PyEnum):
@@ -218,7 +219,7 @@ class OdRequest(Base):
     
     reason = Column(Text, nullable=False)
     proof_url = Column(Text, nullable=True)
-    status = Column(Enum(OdRequestStatus), default=OdRequestStatus.pending, nullable=False)
+    status = Column(Enum(OdRequestStatus, native_enum=False), default=OdRequestStatus.pending, nullable=False)
     
     class_adviser_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     hod_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -429,14 +430,14 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(UUIDStr, primary_key=True, default=_gen_uuid)
-    user_id = Column(UUIDStr, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUIDStr, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     type = Column(Enum(NotificationType), nullable=False)
     link = Column(Text, nullable=True)
-    target_role = Column(Enum(UserRole), nullable=True)
-    is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    target_role = Column(Enum(UserRole), nullable=True, index=True)
+    is_read = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     user = relationship("User", primaryjoin="Notification.user_id == User.id", back_populates="notifications", lazy="selectin")
 
@@ -445,13 +446,13 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(UUIDStr, primary_key=True, default=_gen_uuid)
-    user_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     action = Column(String(100), nullable=False)
     module = Column(String(100), nullable=False)
     details = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
     payload_diff = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     user = relationship("User", primaryjoin="AuditLog.user_id == User.id", back_populates="audit_logs", lazy="selectin")
 
@@ -472,7 +473,7 @@ class TimetableVersion(Base):
     __tablename__ = "timetable_versions"
 
     id = Column(UUIDStr, primary_key=True, default=_gen_uuid)
-    department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="CASCADE"), nullable=False)
+    department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="CASCADE"), nullable=False, index=True)
     shift = Column(String(20), nullable=True)          # which shift was updated, None = all
     source = Column(String(20), nullable=False)        # "ocr" | "allocator" | "manual"
     published_by = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -499,19 +500,27 @@ class Circular(Base):
     id = Column(UUIDStr, primary_key=True, default=_gen_uuid)
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    status = Column(Enum(CircularStatus), default=CircularStatus.draft, nullable=False)
-    target_role = Column(Enum(UserRole), nullable=True)          # None = everyone
-    department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    status = Column(Enum(CircularStatus, native_enum=False), default=CircularStatus.draft, nullable=False, index=True)
+    target_role = Column(Enum(UserRole, native_enum=False), nullable=True, index=True)          # None = everyone
+    department_id = Column(UUIDStr, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     target_semester = Column(Integer, nullable=True)
+    target_year = Column(Integer, nullable=True)
     target_section = Column(String(20), nullable=True)
-    author_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    target_programme = Column(String(50), nullable=True)
+    target_shift = Column(String(50), nullable=True)
+    attachment_url = Column(Text, nullable=True)
+    attachment_name = Column(String(255), nullable=True)
+    author_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     signer_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     signer_name = Column(String(255), nullable=True)
     publisher_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     publisher_name = Column(String(255), nullable=True)
+    target = Column(String(50), nullable=True, index=True)
+    selected_faculty_ids = Column(JSON, nullable=True)
+    valid_from = Column(String(20), nullable=True)
+    valid_until = Column(String(20), nullable=True, index=True)
     published_at = Column(DateTime, nullable=True)
-    recipient_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     author = relationship("User", primaryjoin="Circular.author_id == User.id", lazy="selectin")
@@ -536,7 +545,7 @@ class BonafideRequest(Base):
     student_id = Column(UUIDStr, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     purpose = Column(String(255), nullable=False)
     address_to = Column(String(255), nullable=True)
-    stage = Column(Enum(BonafideStage), default=BonafideStage.pending_faculty, nullable=False)
+    stage = Column(Enum(BonafideStage, native_enum=False), default=BonafideStage.pending_faculty, nullable=False)
     faculty_id = Column(UUIDStr, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     faculty_comment = Column(Text, nullable=True)
     faculty_reviewed_at = Column(DateTime, nullable=True)

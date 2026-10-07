@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 
 export const StudentManagement: React.FC = () => {
-  const { students, departments, addStudent, updateStudent, deleteStudent, bulkImportStudents, addToast } = useApp();
+  const { students, departments, addStudent, updateStudent, deleteStudent, bulkImportStudents, addToast, t } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterProgramme, setFilterProgramme] = useState<string>('all');
@@ -98,17 +98,17 @@ export const StudentManagement: React.FC = () => {
 
   const [csvText, setCsvText] = useState('');
 
-  const filteredStudents = students.filter((s) => {
-    const matchesSearch =
-      s.name.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
-      s.regNo.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
-      s.rollNo.toLowerCase().includes(appliedSearchTerm.toLowerCase());
+  const scopedStudents = students.filter((s) => {
     const matchesDept = appliedFilterDept === 'all' || s.departmentId === appliedFilterDept;
     const matchesProgramme = appliedFilterProgramme === 'all' || s.programme === appliedFilterProgramme;
-    const matchesYear = appliedFilterYear === 'all' || s.year === appliedFilterYear;
+    const matchesYear = appliedFilterYear === 'all' || String(s.year) === String(appliedFilterYear);
     const matchesShift = appliedFilterShift === 'all' || s.shift === appliedFilterShift;
-    return matchesSearch && matchesDept && matchesProgramme && matchesYear && matchesShift;
+    return matchesDept && matchesProgramme && matchesYear && matchesShift;
   });
+
+  const filteredStudents = appliedSearchTerm.trim()
+    ? rankedSearch(scopedStudents, appliedSearchTerm, [(s) => s.name, (s) => s.regNo, (s) => s.rollNo, (s) => s.email])
+    : scopedStudents;
 
   const handleOpenAdd = (student?: Student) => {
     if (student) {
@@ -192,7 +192,7 @@ export const StudentManagement: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
         <div>
           <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight">
-            Students Roster Management
+            {t('students.rosterManagement', 'Students Roster Management')}
           </h2>
 
         </div>
@@ -203,14 +203,14 @@ export const StudentManagement: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 bg-[#F7F9FC] dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[#0F172A] dark:text-zinc-200 text-xs font-semibold rounded-xl transition-colors"
           >
             <FileUp className="w-4 h-4 text-[#2563EB] dark:text-[#3B82F6]" />
-            CSV Bulk Import
+            {t('students.csvBulkImport', 'CSV Bulk Import')}
           </button>
           <button
             onClick={() => handleOpenAdd()}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-[#FFFFFF] dark:bg-[#2563EB] dark:text-[#FFFFFF] dark:hover:bg-white text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Register Student
+            {t('students.registerStudent', 'Register Student')}
           </button>
         </div>
       </div>
@@ -226,7 +226,7 @@ export const StudentManagement: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter') applyFilters();
             }}
-            placeholder="Search by student name, Reg No, or Roll No..."
+            placeholder={t('students.searchPlaceholder', 'Search by student name, Reg No, or Roll No...')}
             className="w-full pl-10 pr-3 py-2 text-xs bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0] dark:border-[#232326] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
           />
         </div>
@@ -291,13 +291,13 @@ export const StudentManagement: React.FC = () => {
           onClick={clearFilters}
           className="px-4 py-2 text-xs font-bold text-[#000000] dark:text-[#64748B] bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0] dark:border-[#232326] rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
         >
-          Clear
+          {t('common.clear', 'Clear')}
         </button>
         <button
           onClick={applyFilters}
           className="px-4 py-2 text-xs font-bold text-white bg-[#2563EB] dark:bg-[#2563EB] hover:bg-[#161B33] dark:hover:bg-[#2563EB] rounded-xl transition-colors shrink-0"
         >
-          Search
+          {t('common.search', 'Search')}
         </button>
       </div>
 
@@ -307,19 +307,19 @@ export const StudentManagement: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-[#F7F9FC] dark:bg-zinc-800/60 border-b border-[#E2E8F0] dark:border-zinc-800 text-[#000000] dark:text-[#64748B] dark:text-zinc-400 font-semibold uppercase tracking-wider">
               <tr>
-                <th className="p-3.5 pl-4">Student</th>
-                <th className="p-3.5">Reg No & Roll</th>
-                <th className="p-3.5">Programme & Year</th>
-                <th className="p-3.5">Attendance %</th>
-                <th className="p-3.5">Guardian</th>
-                <th className="p-3.5 text-right pr-4">Actions</th>
+                <th className="p-3.5 pl-4">{t('students.student', 'Student')}</th>
+                <th className="p-3.5">{t('students.regNoRoll', 'Reg No & Roll')}</th>
+                <th className="p-3.5">{t('students.programmeYear', 'Programme & Year')}</th>
+                <th className="p-3.5">{t('students.attendancePct', 'Attendance %')}</th>
+                <th className="p-3.5">{t('students.guardian', 'Guardian')}</th>
+                <th className="p-3.5 text-right pr-4">{t('common.actions', 'Actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
               {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-[#000000] dark:text-[#64748B]">
-                    No records found for the selected filters.
+                    {t('common.noRecordsFound', 'No records found for the selected filters.')}
                   </td>
                 </tr>
               ) : (

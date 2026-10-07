@@ -1,5 +1,6 @@
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import Base, engine, AsyncSessionLocal
+from app.services.auth import seed_admin_users, seed_demo_passwords_and_usernames
 
 import app.models.models  # noqa: F401 — ensures all models registered
 
@@ -11,9 +12,29 @@ from app.routers import auth, admin, faculty, student, hod, reports, notificatio
 from app.routers import circulars, bonafide, day_orders, signup, upload
 from fastapi.staticfiles import StaticFiles
 
+from sqlalchemy import text
+
+async def migrate_circular_schema(db):
+    try:
+        await db.execute(text("ALTER TABLE circulars ADD COLUMN IF NOT EXISTS target VARCHAR;"))
+        await db.execute(text("ALTER TABLE circulars ADD COLUMN IF NOT EXISTS selected_faculty_ids JSONB DEFAULT '[]'::jsonb;"))
+        await db.execute(text("ALTER TABLE circulars ADD COLUMN IF NOT EXISTS valid_from VARCHAR;"))
+        await db.execute(text("ALTER TABLE circulars ADD COLUMN IF NOT EXISTS valid_until VARCHAR;"))
+        await db.commit()
+    except Exception as e:
+        print(f"[Migration Warning] Circular schema migration: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Supabase schema is managed by sql/migration_001_schema.sql; do not run DDL on every boot.
+    # Ensure bootstrap admin accounts, schema updates and demo credentials are ready
+    try:
+        async with AsyncSessionLocal() as db:
+            await migrate_circular_schema(db)
+            await seed_admin_users(db)
+            if settings.DEV_MODE:
+                await seed_demo_passwords_and_usernames(db)
+    except Exception as e:
+        print(f"[Warning] Startup tasks failed: {e}")
     yield
 
 

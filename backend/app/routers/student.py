@@ -15,7 +15,7 @@ from app.schemas import (
     StudentRead, StudentDashboard, StudentAttendanceSummary,
     AttendanceHistoryEntry, LeaveRequestCreate, LeaveRequestRead,
     AppNotificationRead, StudentUpdate, TimetableSlotRead,
-    FacultyApproval, HodApproval,
+    FacultyApproval, HodApproval, SubjectRead,
 )
 from app.core.formatters import (
     format_student, format_attendance_record, format_leave,
@@ -91,7 +91,7 @@ async def attendance_summary(
     return await get_student_attendance_summary(str(current_user.id), db)
 
 
-@router.get("/subjects", response_model=list[dict])
+@router.get("/subjects", response_model=list[SubjectRead])
 async def student_subjects(
     current_user: User = Depends(require_role("student")),
     db: AsyncSession = Depends(get_db),
@@ -246,6 +246,7 @@ async def _timetable_to_dict(slot: Timetable, db: AsyncSession) -> dict:
 from app.models.models import OdRequest, OdRequestStatus
 from app.schemas.entities import OdRequestRead, OdRequestCreate
 
+@router.get("/od-requests", response_model=list[OdRequestRead], include_in_schema=False)
 @router.get("/od", response_model=list[OdRequestRead])
 async def my_od_requests(
     current_user: User = Depends(require_role("student")),

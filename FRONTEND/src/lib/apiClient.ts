@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/+$/, '');
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api').replace(/\/+$/, '');
 
 type FetchOptions = {
   skipAuth?: boolean;
@@ -92,12 +92,22 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
     finalBody = JSON.stringify(snakifyKeys(body));
   }
 
-  const resp = await fetch(url, {
-    method: method || 'GET',
-    signal,
-    headers: finalHeaders,
-    body: finalBody,
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(url, {
+      method: method || 'GET',
+      signal,
+      headers: finalHeaders,
+      body: finalBody,
+    });
+  } catch (err: any) {
+    if (err?.name === 'TypeError' || (err?.message && err.message.toLowerCase().includes('fetch'))) {
+      throw new Error(
+        `Unable to connect to backend API server at ${API_BASE}. Please verify that your backend server is running.`
+      );
+    }
+    throw err;
+  }
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: 'Unknown error' }));
@@ -119,7 +129,17 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
 async function upload<T>(path: string, formData: FormData): Promise<T> {
   const token = getJwt();
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: formData });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: formData });
+  } catch (err: any) {
+    if (err?.name === 'TypeError' || (err?.message && err.message.toLowerCase().includes('fetch'))) {
+      throw new Error(
+        `Unable to connect to backend API server at ${API_BASE}. Please verify that your backend server is running.`
+      );
+    }
+    throw err;
+  }
   const raw = await response.json().catch(() => ({ detail: 'Unknown error' }));
   if (!response.ok) throw new Error(typeof raw.detail === 'string' ? raw.detail : 'Request failed');
   return camelizeKeys(raw) as T;
@@ -214,10 +234,10 @@ export const apiClient = {
 
 
   // Auth
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, role?: string) =>
     request<{ access_token?: string; accessToken?: string; token_type?: string; tokenType?: string; user: any }>('/auth/login', {
       method: 'POST',
-      body: { username, password },
+      body: { username, password, role },
       skipAuth: true,
     }).then((response) => {
       const token = response.access_token ?? response.accessToken;
@@ -531,6 +551,9 @@ export const apiClient = {
 
   // ── Circulars (DB-backed via Supabase) ────────────────────────────────────
   circulars: () => request<any[]>('/circulars/'),
+  myAdvisingClass: () => request<any>('/circulars/my-advising-class'),
+  sendClassAdvisorCircular: (data: Record<string, unknown>) =>
+    request<any>('/circulars/class-advisor', { method: 'POST', body: data }),
   createCircular: (data: Record<string, unknown>) =>
     request<any>('/circulars/', { method: 'POST', body: data }),
   updateCircular: (id: string, data: Record<string, unknown>) =>

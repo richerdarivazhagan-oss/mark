@@ -61,6 +61,7 @@ def _fmt(b: BonafideRequest) -> BonafideRead:
 
 
 @router.get("", response_model=list[BonafideRead])
+@router.get("/", response_model=list[BonafideRead])
 async def list_bonafide(
     current_user: User = Depends(require_role("admin", "hod", "faculty", "student")),
     db: AsyncSession = Depends(get_db),

@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { StaffDayOrder, DayOrderEntry } from '../../types';
 import { Modal } from '../common/Modal';
 import { BackButton } from '../common/BackButton';
+import { preprocessImageForOcr, runOcrParsingPipeline, parseRomanOrder, classifyTableParts, detectImageMonthHeader, OcrPipelineResult } from '../../lib/ocrPipeline';
 import {
   Plus,
   Trash2,
@@ -14,7 +15,10 @@ import {
   CalendarDays,
   RotateCcw,
   FileText,
-  Eye
+  Eye,
+  AlertTriangle,
+  CheckCircle2,
+  Info
 } from 'lucide-react';
 
 const MONTHS = [
@@ -24,31 +28,26 @@ const MONTHS = [
 
 // ---------- Day Order OCR parsing helpers ----------
 
-function parseDateToken(tok: string, fallbackYear?: number): string | null {
-  const m = tok.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
-  if (!m) return null;
-  let day = parseInt(m[1], 10);
-  let month = parseInt(m[2], 10);
-  let year = parseInt(m[3], 10);
-  if (year < 100) year += 2000;
-  if (month > 12 && day <= 12) {
-    const tmp = day;
-    day = month;
-    month = tmp;
-  }
-  if (day < 1 || day > 31 || month < 1 || month > 12) return null;
-  if (fallbackYear && year < fallbackYear - 1) year = fallbackYear;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+export const ROMAN_DAY_ORDERS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+
+export const HOLIDAY_RE = /விடுமுறை|விடுமுறையும்|அரசு\s*விடுமுறை|வார\s*விடுமுறை|உள்ளூர்\s*விடுமுறை|மிலாடி|காந்தி|விநாயகர்|பூஜை|தீபாவளி|பொங்கல்|திருவள்ளுவர்|உழவர்|குடியரசு|சுதந்திர|புத்தாண்டு|கிறிஸ்துமஸ்|ரம்ஜான்|பக்ரீத்|ஈகை|மஹாவீர்|புனித\s*வெள்ளி|holiday|leave|weekly\s*off|compensatory|vacation|closed|public\s*holiday|government/i;
+
+export const TAMIL_DAYS = [
+  'ஞாயிறு', 'திங்கள்', 'செவ்வாய்', 'புதன்', 'வியாழன்', 'வெள்ளி', 'சனி',
+  'ஞாயி', 'திங்', 'செவ்', 'புத', 'வியா', 'வெள்',
+  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+  'sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'
+];
+
+export function isDayName(token: string): boolean {
+  if (!token) return false;
+  const clean = token.toLowerCase().replace(/[^a-z\u0B80-\u0BFF]/g, '');
+  return TAMIL_DAYS.some(d => clean.startsWith(d) || d.startsWith(clean));
 }
 
-function romanToNumber(token: string): number | null {
-  const t = token.trim().toUpperCase();
-  const roman: Record<string, number> = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12 };
-  if (roman[t] != null) return roman[t];
-  return null;
+export function parseRomanDayOrder(token: string): number | null {
+  return parseRomanOrder(token);
 }
-
-const HOLIDAY_RE = /விடுமுறை|விடுமுறையும்|holiday|leave|weekly\s*off|compensatory|vacation|closed|public\s*holiday|government/i;
 
 function parseDayOrderText(rawText: string, month: string): DayOrderEntry[] {
   const [fy, fm] = month.split('-').map(Number);
@@ -56,73 +55,36 @@ function parseDayOrderText(rawText: string, month: string): DayOrderEntry[] {
   const entries: DayOrderEntry[] = [];
   const seen = new Set<string>();
 
-  const pushEntry = (date: string, order?: number | null, holiday?: boolean, holidayTitle?: string) => {
-    if (seen.has(date)) return;
-    seen.add(date);
-    entries.push({
-      date,
-      dayOrder: typeof order === 'number' && order >= 1 ? order : undefined,
-      isHoliday: !!holiday,
-      holidayTitle: holiday ? holidayTitle || 'Holiday' : undefined,
-    });
-  };
-
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
-    const tokens = line.split(/\s+/).filter(Boolean);
 
-    let date: string | null = null;
-    let dateFound = false;
-    for (let i = 0; i < tokens.length; i++) {
-      const tok = tokens[i];
-      const full = parseDateToken(tok, fy || new Date().getFullYear());
-      if (full) {
-        const [yy, mo] = full.split('-').map(Number);
-        if (!fm || mo === fm) {
-          date = full;
-          dateFound = true;
-          break;
-        }
-      }
-      if (/^\d{1,2}$/.test(tok)) {
-        const day = parseInt(tok, 10);
-        if (day >= 1 && day <= 31) {
-          date = `${fy || new Date().getFullYear()}-${String(fm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          dateFound = true;
-          break;
-        }
-      }
-    }
-    if (!dateFound || !date) continue;
+    // Skip table header rows or summary lines
+    if (/^(தேதி|நாள்|வரிசை|பணி|date|day|order|working|மொத்த|total)/i.test(line)) continue;
 
-    let dayOrder: number | null = null;
-    let holiday = false;
-    let holidayTitle: string | undefined;
-
-    for (const tok of tokens) {
-      if (HOLIDAY_RE.test(tok)) {
-        holiday = true;
-        if (!holidayTitle) holidayTitle = tok;
-        continue;
-      }
-      const roman = romanToNumber(tok);
-      if (roman != null && roman >= 1) {
-        dayOrder = roman;
-        continue;
-      }
-      if (/^\d{1,2}$/.test(tok)) {
-        const n = parseInt(tok, 10);
-        if (n >= 1 && n <= 31 && n <= 7) {
-          dayOrder = n;
-        }
-      }
-      if (tok === '-') {
-        dayOrder = null;
-      }
+    let parts: string[] = [];
+    if (line.includes('|')) {
+      parts = line.split('|').map((p) => p.trim()).filter(Boolean);
+    } else {
+      parts = line.replace(/^[|.\s-]+|[|.\s-]+$/g, '').split(/\s+/).filter(Boolean);
     }
 
-    pushEntry(date, dayOrder, holiday, holidayTitle);
+    const parsed = classifyTableParts(parts);
+    if (!parsed.dateNum) continue;
+
+    const dateKey = `${fy}-${String(fm).padStart(2, '0')}-${String(parsed.dateNum).padStart(2, '0')}`;
+    if (seen.has(dateKey)) continue;
+    seen.add(dateKey);
+
+    entries.push({
+      date: dateKey,
+      dayName: parsed.dayName || undefined,
+      dayOrder: parsed.dayOrder != null ? parsed.dayOrder : undefined,
+      workingDayCount: parsed.workingDayCount != null ? parsed.workingDayCount : undefined,
+      remark: parsed.remark || undefined,
+      isHoliday: parsed.isHoliday,
+      holidayTitle: parsed.isHoliday ? (parsed.holidayTitle || 'Holiday') : (parsed.holidayTitle || undefined),
+    });
   }
 
   return entries.sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -135,12 +97,31 @@ export const DayOrderOCR: React.FC = () => {
     staffDayOrders,
     saveStaffDayOrder,
     updateStaffDayOrder,
-    addToast
+    setActiveScreen,
+    addToast,
+    selectedCalendarMonth,
+    setSelectedCalendarMonth,
+    t,
+    language
   } = useApp();
 
   const [editingSchedule, setEditingSchedule] = useState<StaffDayOrder | null>(null);
-  const [dayTitle, setDayTitle] = useState('');
-  const [dayMonth, setDayMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [dayMonth, setDayMonth] = useState(selectedCalendarMonth || '2026-09');
+  const [dayTitle, setDayTitle] = useState(() => {
+    const [y, m] = (selectedCalendarMonth || '2026-09').split('-').map(Number);
+    const mName = MONTHS[(m ?? 1) - 1] || 'September';
+    return `${mName} ${y || 2026} Monthly Staff Order`;
+  });
+
+  React.useEffect(() => {
+    if (selectedCalendarMonth) {
+      setDayMonth(selectedCalendarMonth);
+      const [y, m] = selectedCalendarMonth.split('-').map(Number);
+      const mName = MONTHS[(m ?? 1) - 1] || 'September';
+      setDayTitle(`${mName} ${y || 2026} Monthly Staff Order`);
+    }
+  }, [selectedCalendarMonth]);
+
   const [imageUrl, setImageUrl] = useState('');
   const [rawText, setRawText] = useState('');
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -172,6 +153,9 @@ export const DayOrderOCR: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const [showDebug, setShowDebug] = useState(false);
+  const [ocrDiagnostics, setOcrDiagnostics] = useState<OcrPipelineResult['diagnostics'] | null>(null);
+
   const runOCR = async () => {
     if (!imageUrl) {
       addToast('No Image', 'Upload a schedule image first.', 'danger');
@@ -180,26 +164,117 @@ export const DayOrderOCR: React.FC = () => {
     setOcrBusy(true);
     setOcrProgress(0);
     setRawText('');
+    setOcrDiagnostics(null);
     try {
+      // 1. Preprocess image on HTML canvas
+      const preprocessedUrl = await preprocessImageForOcr(imageUrl);
+
+      // 2. Run Tesseract with English + Tamil language model
       const Tesseract = await import('tesseract.js');
-      const worker = await Tesseract.createWorker('eng', 1, {
-        logger: (m: { status: string; progress: number }) => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(Math.round(m.progress * 100));
+      let worker;
+      try {
+        worker = await Tesseract.createWorker(['eng', 'tam'], 1, {
+          logger: (m: { status: string; progress: number }) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
           }
-        }
-      });
-      const { data } = await worker.recognize(imageUrl);
+        });
+      } catch {
+        worker = await Tesseract.createWorker('eng', 1, {
+          logger: (m: { status: string; progress: number }) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          }
+        });
+      }
+
+      const { data } = await worker.recognize(preprocessedUrl);
       await worker.terminate();
-      const text = data.text || '';
-      setRawText(text);
-      setEntries(parseDayOrderText(text, dayMonth));
-      if (entries.length === 0) {
-        addToast('OCR Complete', 'Could not auto-detect dates/orders — verify the date order table below.', 'info');
+
+      const raw = data.text || '';
+
+      // 3. Validate image month header against selected Academic Calendar month/year
+      const detectedHeader = detectImageMonthHeader(raw);
+      if (detectedHeader) {
+        const [selYStr, selMStr] = dayMonth.split('-');
+        const selY = Number(selYStr);
+        const selM = Number(selMStr);
+        const selMonthName = MONTHS[(selM ?? 1) - 1] || 'September';
+        const selLabel = `${selMonthName} ${selY}`;
+
+        let isMismatch = false;
+        if (detectedHeader.ymStr && detectedHeader.ymStr !== dayMonth) {
+          isMismatch = true;
+        } else if (!detectedHeader.ymStr && detectedHeader.month && detectedHeader.month !== selM) {
+          isMismatch = true;
+        }
+
+        if (isMismatch) {
+          addToast(
+            'Month Mismatch Error',
+            `Selected month is ${selLabel}, but the uploaded Staff Order is for ${detectedHeader.label}. Please select the correct month or upload the correct image.`,
+            'danger'
+          );
+          setOcrBusy(false);
+          return;
+        }
+      }
+
+      // 4. Run robust OCR text cleaning, date detection, and row mapping pipeline using target dayMonth
+      const result = runOcrParsingPipeline(raw, dayMonth);
+      setRawText(result.cleanedText || raw);
+      setEntries(result.entries);
+      setOcrDiagnostics(result.diagnostics);
+
+      if (result.entries.length === 0) {
+        addToast(
+          'OCR Extraction Complete',
+          'Extracted text successfully. Please review or manually add date rows below.',
+          'info'
+        );
+      } else {
+        // Filter validated vs unverified entries
+        const validEntries = result.entries.filter(
+          (e) => !e.needsVerification && e.date && /^\d{4}-\d{2}-\d{2}$/.test(e.date)
+        );
+        const needsReviewCount = result.entries.length - validEntries.length;
+        const title = dayTitle.trim() || `Monthly Day Order (${dayMonth})`;
+
+        // Auto-save validated entries to database & Academy Calendar
+        if (validEntries.length > 0) {
+          const trimmedValidated: DayOrderEntry[] = validEntries
+            .map((e) => ({
+              date: e.date,
+              dayName: e.dayName,
+              dayOrder: typeof e.dayOrder === 'number' && e.dayOrder >= 1 && e.dayOrder <= 6 ? e.dayOrder : undefined,
+              workingDayCount: typeof e.workingDayCount === 'number' ? e.workingDayCount : undefined,
+              remark: e.remark,
+              isHoliday: !!e.isHoliday,
+              holidayTitle: e.isHoliday ? (e.holidayTitle || e.remark || 'Holiday') : undefined,
+            }))
+            .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+          await saveStaffDayOrder({ month: dayMonth, title, imageUrl, entries: trimmedValidated });
+        }
+
+        if (needsReviewCount === 0) {
+          addToast('Calendar Updated', 'OCR completed successfully. Calendar updated.', 'success');
+          setTimeout(() => {
+            setActiveScreen('academic_calendar');
+          }, 700);
+        } else {
+          addToast(
+            'OCR Complete with Warnings',
+            `OCR processed. ${validEntries.length} validated entries saved to Academy Calendar. ${needsReviewCount} entries require verification below.`,
+            'warning'
+          );
+        }
       }
     } catch (err) {
-      console.error(err);
-      addToast('OCR Failed', 'Could not read the image text. Please try again.', 'danger');
+      console.error('OCR pipeline error:', err);
+      addToast('OCR Failed', 'Could not process image text. Please try again.', 'danger');
     } finally {
       setOcrBusy(false);
     }
@@ -210,7 +285,7 @@ export const DayOrderOCR: React.FC = () => {
     setRawText('');
     setEntries([]);
     setDayTitle('');
-    setDayMonth(new Date().toISOString().slice(0, 7));
+    setDayMonth(selectedCalendarMonth || '2026-09');
     setEditingSchedule(null);
   };
 
@@ -233,7 +308,7 @@ export const DayOrderOCR: React.FC = () => {
     ]);
   };
 
-  const saveDayOrder = () => {
+  const saveDayOrder = async () => {
     if (entries.length === 0) {
       addToast('No Entries', 'Add at least one date → day order row before saving.', 'danger');
       return;
@@ -246,22 +321,30 @@ export const DayOrderOCR: React.FC = () => {
     const trimmed: DayOrderEntry[] = entries
       .map((e) => ({
         date: e.date,
-        dayOrder: Number(e.dayOrder) >= 1 ? Number(e.dayOrder) : undefined,
+        dayName: e.dayName,
+        dayOrder: typeof e.dayOrder === 'number' && e.dayOrder >= 1 && e.dayOrder <= 6 ? e.dayOrder : undefined,
+        workingDayCount: typeof e.workingDayCount === 'number' ? e.workingDayCount : undefined,
+        remark: e.remark,
         isHoliday: !!e.isHoliday,
-        holidayTitle: e.isHoliday ? e.holidayTitle : undefined,
+        holidayTitle: e.isHoliday ? (e.holidayTitle || e.remark || 'Holiday') : undefined,
       }))
       .sort((a, b) => (a.date < b.date ? -1 : 1));
     const title = dayTitle.trim() || `Monthly Day Order`;
     if (editingSchedule) {
-      updateStaffDayOrder({ ...editingSchedule, month: dayMonth, title, imageUrl, entries: trimmed });
+      await updateStaffDayOrder({ ...editingSchedule, month: dayMonth, title, imageUrl, entries: trimmed });
       setEditingSchedule(null);
     } else {
-      saveStaffDayOrder({ month: dayMonth, title, imageUrl, entries: trimmed });
+      await saveStaffDayOrder({ month: dayMonth, title, imageUrl, entries: trimmed });
     }
     setImageUrl('');
     setRawText('');
     setEntries([]);
     setDayTitle('');
+
+    addToast('Calendar Updated', 'OCR completed successfully. Calendar updated.', 'success');
+    setTimeout(() => {
+      setActiveScreen('academic_calendar');
+    }, 600);
   };
 
   const loadForEdit = (s: StaffDayOrder) => {
@@ -355,7 +438,10 @@ export const DayOrderOCR: React.FC = () => {
               <input
                 type="month"
                 value={dayMonth}
-                onChange={(e) => setDayMonth(e.target.value)}
+                onChange={(e) => {
+                  setDayMonth(e.target.value);
+                  setSelectedCalendarMonth(e.target.value);
+                }}
                 className="w-full p-2.5 text-xs bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl"
               />
             </div>
@@ -428,13 +514,34 @@ export const DayOrderOCR: React.FC = () => {
           )}
 
           {rawText && (
-            <div>
-              <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">
-                Raw OCR Text (for reference)
-              </label>
-              <pre className="max-h-36 overflow-auto p-2.5 text-[10px] leading-relaxed text-[#000000] dark:text-[#64748B] bg-[#F7F9FC] dark:bg-zinc-900 border border-[#E2E8F0] dark:border-zinc-800 rounded-xl whitespace-pre-wrap">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300">
+                  Cleaned OCR Text (for reference)
+                </label>
+                {ocrDiagnostics && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDebug(!showDebug)}
+                    className="text-[10px] font-bold text-[#2563EB] dark:text-[#3B82F6] hover:underline"
+                  >
+                    {showDebug ? 'Hide Diagnostics' : 'Show OCR Diagnostics'}
+                  </button>
+                )}
+              </div>
+              <pre className="max-h-36 overflow-auto p-2.5 text-[10px] leading-relaxed text-[#000000] dark:text-[#64748B] bg-[#F7F9FC] dark:bg-zinc-900 border border-[#E2E8F0] dark:border-zinc-800 rounded-xl whitespace-pre-wrap font-mono">
                 {rawText}
               </pre>
+
+              {showDebug && ocrDiagnostics && (
+                <div className="p-3 bg-zinc-900 text-zinc-100 rounded-xl text-[10px] space-y-1 font-mono border border-zinc-700">
+                  <p className="font-bold text-amber-400">OCR Processing Diagnostics:</p>
+                  <p>• Lines Processed: {ocrDiagnostics.lineCount}</p>
+                  <p>• Dates Detected: {ocrDiagnostics.datesFound}</p>
+                  <p>• Table Grid Detected: {ocrDiagnostics.tableColumnsDetected ? 'Yes (| separated)' : 'No (space-aligned)'}</p>
+                  <p>• Languages Engine: {ocrDiagnostics.languageUsed}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -467,9 +574,9 @@ export const DayOrderOCR: React.FC = () => {
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-[#F7F9FC] dark:bg-zinc-900 border-b border-[#E2E8F0] dark:border-zinc-700 uppercase tracking-wider text-[10px] text-[#000000] dark:text-[#64748B] dark:text-zinc-400">
                   <tr>
-                    <th className="p-2.5 pl-3 font-bold">Date</th>
-                    <th className="p-2.5 font-bold w-28">Day Order</th>
-                    <th className="p-2.5 font-bold w-32">Type</th>
+                    <th className="p-2.5 pl-3 font-bold">{t('calendar.date', 'Date')}</th>
+                    <th className="p-2.5 font-bold w-28">{t('calendar.dayOrder', 'Day Order')}</th>
+                    <th className="p-2.5 font-bold w-32">{t('common.type', 'Type')}</th>
                     <th className="p-2.5 pr-3 w-10"></th>
                   </tr>
                 </thead>
@@ -477,39 +584,78 @@ export const DayOrderOCR: React.FC = () => {
                   {entries.map((e, i) => (
                     <tr key={i} className={e.date === todayKey ? 'bg-[#2563EB]/5 dark:bg-[#2563EB]/20' : ''}>
                       <td className="p-2 pl-3">
-                        <input
-                          type="date"
-                          value={e.date}
-                          onChange={(ev) => editEntry(i, { date: ev.target.value })}
-                          className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border border-transparent focus:border-[#2563EB] rounded-lg"
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="date"
+                            value={e.date}
+                            onChange={(ev) => editEntry(i, { date: ev.target.value })}
+                            className="w-full px-2 py-1.5 text-xs bg-transparent outline-none border border-transparent focus:border-[#2563EB] rounded-lg"
+                          />
+                          {e.dayName && (
+                            <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded">
+                              {e.dayName}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-2">
-                        {e.isHoliday ? (
+                        {e.isHoliday && e.dayOrder == null ? (
                           <input
                             type="text"
-                            value={e.holidayTitle || 'Holiday'}
-                            onChange={(ev) => editEntry(i, { holidayTitle: ev.target.value })}
+                            value={e.holidayTitle || e.remark || 'Holiday'}
+                            onChange={(ev) => editEntry(i, { holidayTitle: ev.target.value, remark: ev.target.value })}
                             className="w-full px-2 py-1.5 text-xs font-bold bg-transparent outline-none border border-transparent focus:border-rose-400 rounded-lg text-rose-600"
                             placeholder="Holiday title"
                           />
+                        ) : e.isHoliday && e.dayOrder != null ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={6}
+                              value={e.dayOrder ?? ''}
+                              onChange={(ev) => editEntry(i, { dayOrder: parseInt(ev.target.value, 10) || undefined })}
+                              className="w-14 px-1.5 py-1 text-xs font-bold bg-transparent outline-none border border-zinc-200 dark:border-zinc-700 focus:border-[#2563EB] rounded-lg text-center"
+                              placeholder="DO"
+                              title={e.workingDayCount != null ? `Day Order (1-6) · Working Day #${e.workingDayCount}` : 'Day Order (1-6)'}
+                            />
+                            <input
+                              type="text"
+                              value={e.holidayTitle || e.remark || 'Holiday'}
+                              onChange={(ev) => editEntry(i, { holidayTitle: ev.target.value, remark: ev.target.value })}
+                              className="w-full px-2 py-1 text-xs font-bold bg-transparent outline-none border border-transparent focus:border-rose-400 rounded-lg text-rose-600"
+                              placeholder="Holiday title"
+                            />
+                          </div>
                         ) : (
-                          <input
-                            type="number"
-                            min={1}
-                            max={7}
-                            value={e.dayOrder}
-                            onChange={(ev) => editEntry(i, { dayOrder: parseInt(ev.target.value, 10) || 1 })}
-                            className="w-20 px-2 py-1.5 text-xs font-bold bg-transparent outline-none border border-transparent focus:border-[#2563EB] rounded-lg"
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={6}
+                              value={e.dayOrder ?? ''}
+                              onChange={(ev) => editEntry(i, { dayOrder: parseInt(ev.target.value, 10) || undefined })}
+                              className="w-20 px-2 py-1.5 text-xs font-bold bg-transparent outline-none border border-transparent focus:border-[#2563EB] rounded-lg"
+                              placeholder="—"
+                              title={e.workingDayCount != null ? `Working Day #${e.workingDayCount}` : undefined}
+                            />
+                            {e.workingDayCount != null && (
+                              <span className="shrink-0 text-[10px] text-zinc-400 font-semibold" title={`Working Day #${e.workingDayCount}`}>
+                                #{e.workingDayCount}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="p-2">
                         <select
-                          value={e.isHoliday ? 'holiday' : 'working'}
+                          value={e.isHoliday ? (e.dayOrder != null ? 'both' : 'holiday') : 'working'}
                           onChange={(ev) => {
-                            if (ev.target.value === 'holiday') {
+                            const val = ev.target.value;
+                            if (val === 'holiday') {
                               editEntry(i, { isHoliday: true, holidayTitle: e.holidayTitle || 'Holiday', dayOrder: undefined });
+                            } else if (val === 'both') {
+                              editEntry(i, { isHoliday: true, holidayTitle: e.holidayTitle || 'Holiday', dayOrder: e.dayOrder || 1 });
                             } else {
                               editEntry(i, { isHoliday: false, holidayTitle: undefined, dayOrder: e.dayOrder || 1 });
                             }
@@ -518,6 +664,7 @@ export const DayOrderOCR: React.FC = () => {
                         >
                           <option value="working">Day Order</option>
                           <option value="holiday">Holiday / Leave</option>
+                          <option value="both">Both (Day Order &amp; Leave)</option>
                         </select>
                       </td>
                       <td className="p-2 pr-3 text-right">
@@ -594,22 +741,33 @@ export const DayOrderOCR: React.FC = () => {
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {viewingSchedule.entries.map((e) => (
                     <tr key={e.date}>
-                      <td className="p-2 pl-3 font-mono text-[#1E293B] dark:text-zinc-300">{e.date}</td>
+                      <td className="p-2 pl-3 font-mono text-[#1E293B] dark:text-zinc-300">
+                        {e.date} {e.dayName ? `(${e.dayName})` : ''}
+                      </td>
                       <td className="p-2">
-                        {e.isHoliday ? (
-                          <span className="px-2.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-extrabold">
-                            —
+                        {e.dayOrder != null ? (
+                          <span className="px-2.5 py-0.5 rounded-md bg-[#2563EB]/10 dark:bg-[#2563EB]/40 text-[#2563EB] dark:text-[#3B82F6] font-extrabold">
+                            {ROMAN_DAY_ORDERS[e.dayOrder] || e.dayOrder}
                           </span>
                         ) : (
-                          <span className="px-2.5 py-0.5 rounded-md bg-[#2563EB]/10 dark:bg-[#2563EB]/40 text-[#2563EB] dark:text-[#3B82F6] font-extrabold">
-                            {e.dayOrder}
+                          <span className="px-2.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-extrabold">
+                            —
+                          </span>
+                        )}
+                        {e.workingDayCount != null && (
+                          <span className="ml-1.5 text-[10px] text-zinc-400 font-semibold">
+                            (Day #{e.workingDayCount})
                           </span>
                         )}
                       </td>
                       <td className="p-2">
-                        {e.isHoliday ? (
+                        {e.isHoliday && e.dayOrder != null ? (
+                          <span className="px-2.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-bold">
+                            {e.holidayTitle || e.remark || 'Holiday'} (DO {ROMAN_DAY_ORDERS[e.dayOrder] || e.dayOrder})
+                          </span>
+                        ) : e.isHoliday || e.remark ? (
                           <span className="px-2.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-bold">
-                            {e.holidayTitle || 'Holiday'}
+                            {e.holidayTitle || e.remark || 'Holiday'}
                           </span>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-bold">

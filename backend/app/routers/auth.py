@@ -12,7 +12,7 @@ from app.schemas import (
 )
 from app.services.auth import (
     login_by_username, change_password, change_password_by_username,
-    reset_password, _format_user,
+    reset_password, _format_user, RoleMismatchError,
 )
 from datetime import datetime
 
@@ -26,15 +26,34 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Login with username + password.
-    Username = reg_no for students, employee_id for faculty/HOD,
-    Administrator usernames are loaded from backend environment settings.
+    Login with username/email + password + role.
+    Strict role-based authentication requires the selected role to match the account's actual role in the DB.
     """
+    identifier = (request.username or request.email or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username or email is required")
+
+    if not request.role or not request.role.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role selection is required. Please select your role (Admin, Faculty, HOD, or Student).",
+        )
+
     try:
-        response = await login_by_username(request.username, request.password, db)
+        response = await login_by_username(
+            username=identifier,
+            password=request.password,
+            db=db,
+            expected_role=request.role,
+        )
         return response
+    except RoleMismatchError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid role or credentials.")
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        detail = str(e)
+        if "deactivated" in detail.lower():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid role or credentials.")
 
 
 # ─── Current user ─────────────────────────────────────────────────────────────
@@ -223,7 +242,12 @@ async def _get_user_from_token(authorization: str | None, db: AsyncSession) -> U
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    from sqlalchemy.orm import joinedload
+    result = await db.execute(
+        select(User)
+        .options(joinedload(User.department), joinedload(User.advising_department))
+        .where(User.id == str(user_id))
+    )
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
@@ -238,7 +262,14 @@ async def _verify_token(authorization: str | None, db: AsyncSession) -> User | N
     if not payload:
         return None
     user_id = payload.get("user_id")
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    if not user_id:
+        return None
+    from sqlalchemy.orm import joinedload
+    result = await db.execute(
+        select(User)
+        .options(joinedload(User.department), joinedload(User.advising_department))
+        .where(User.id == str(user_id))
+    )
     return result.scalar_one_or_none()
 
 

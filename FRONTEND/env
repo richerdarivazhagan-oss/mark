@@ -1,0 +1,4 @@
+# ── Supabase Configuration (Client-side) ──────────────────────────────────────
+VITE_SUPABASE_URL=https://ludljwifabuqzwxfjcks.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1ZGxqd2lmYWJ1cXp3eGZqY2tzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg0MzYsImV4cCI6MjEwMzU4NDQzNn0.public_anon_key_placeholder
+VITE_API_BASE_URL=http://localhost:8001/api

@@ -4,7 +4,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export const ToastContainer: React.FC = () => {
-  const { toasts, removeToast } = useApp();
+  const { toasts, removeToast, t } = useApp();
 
   return (
     <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
@@ -34,8 +34,8 @@ export const ToastContainer: React.FC = () => {
             >
               {icon}
               <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-semibold">{toast.title}</h4>
-                {toast.message && <p className="text-xs opacity-80 mt-0.5 leading-relaxed">{toast.message}</p>}
+                <h4 className="text-sm font-semibold">{t(toast.title)}</h4>
+                {toast.message && <p className="text-xs opacity-80 mt-0.5 leading-relaxed">{t(toast.message)}</p>}
               </div>
               <button
                 onClick={() => removeToast(toast.id)}

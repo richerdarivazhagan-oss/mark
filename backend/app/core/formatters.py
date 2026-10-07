@@ -400,13 +400,6 @@ async def format_correction(corr: Correction, db: AsyncSession) -> CorrectionReq
 
 
 async def format_notification(notif: Notification, db: AsyncSession) -> AppNotificationRead:
-    user_name = ""
-    if notif.user_id:
-        result = await db.execute(select(User).where(User.id == notif.user_id))
-        user = result.scalar_one_or_none()
-        if user:
-            user_name = user.name
-
     return AppNotificationRead(
         id=str(notif.id),
         title=notif.title,

@@ -26,7 +26,7 @@ import {
 } from 'recharts';
 
 export const AdminDashboard: React.FC = () => {
-  const { students, facultyList, departments, subjects, attendanceRecords, setActiveScreen } = useApp();
+  const { students, facultyList, departments, subjects, attendanceRecords, setActiveScreen, t } = useApp();
 
   const presentStatuses = new Set(['present', 'late', 'od']);
   const attendanceEntries = attendanceRecords.flatMap((record) => record.entries);
@@ -53,7 +53,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
         <div>
           <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight">
-            Institutional Admin Command Center
+            {t('dashboard.adminTitle', 'Institutional Admin Command Center')}
           </h2>
         </div>
 
@@ -63,14 +63,14 @@ export const AdminDashboard: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 bg-[#2563EB] hover:bg-[#FFFFFF] dark:bg-[#2563EB] dark:text-[#FFFFFF] text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Add Student
+            {t('dashboard.addStudent', 'Add Student')}
           </button>
           <button
             onClick={() => setActiveScreen('reports_hub')}
             className="flex items-center gap-1.5 px-3 py-2 bg-[#F7F9FC] dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[#0F172A] dark:text-zinc-200 text-xs font-semibold rounded-xl transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4 text-[#2563EB] dark:text-[#3B82F6]" />
-            Reports Hub
+            {t('dashboard.reportsHub', 'Reports Hub')}
           </button>
         </div>
       </div>
@@ -137,8 +137,8 @@ export const AdminDashboard: React.FC = () => {
         <div className="lg:col-span-2 bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0]/90 dark:border-zinc-800 rounded-[28px] p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-bold text-[#0F172A] dark:text-zinc-100">Weekly Attendance Trend</h3>
-              <p className="text-xs text-[#000000] dark:text-[#64748B] dark:text-zinc-400">Campus-wide daily present percentage vs 85% target</p>
+              <h3 className="text-base font-bold text-[#0F172A] dark:text-zinc-100">{t('Weekly Attendance Trend')}</h3>
+              <p className="text-xs text-[#000000] dark:text-[#64748B] dark:text-zinc-400">{t('Campus-wide daily present percentage vs 85% target')}</p>
             </div>
             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-3 py-1 rounded-full">
               Avg {attendancePct}%
@@ -170,12 +170,12 @@ export const AdminDashboard: React.FC = () => {
         <div className="bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0]/90 dark:border-zinc-800 rounded-[28px] p-6 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-[#0F172A] dark:text-zinc-100">Department Performance</h3>
+              <h3 className="text-base font-bold text-[#0F172A] dark:text-zinc-100">{t('Department Performance')}</h3>
               <button
                 onClick={() => setActiveScreen('departments')}
                 className="text-xs font-bold text-[#2563EB] dark:text-[#3B82F6] hover:underline flex items-center gap-1"
               >
-                Manage <ArrowUpRight className="w-3.5 h-3.5" />
+                {t('Manage')} <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -218,7 +218,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Admin Quick Modules Grid */}
       <div>
-        <h3 className="text-xs font-bold text-[#000000] dark:text-[#64748B] uppercase tracking-wider mb-3">Admin Quick Management</h3>
+        <h3 className="text-xs font-bold text-[#000000] dark:text-[#64748B] uppercase tracking-wider mb-3">{t('Admin Quick Management')}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           {[
             { id: 'students', label: 'Students Roster', icon: GraduationCap, desc: 'Roster & Records' },
@@ -238,8 +238,8 @@ export const AdminDashboard: React.FC = () => {
                 <div className="p-2 bg-[#FFFFFF] dark:bg-[#0A0A0A] text-[#2563EB] dark:text-[#3B82F6] rounded-xl w-fit mb-2 group-hover:scale-110 transition-transform">
                   <Icon className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-bold text-[#0F172A] dark:text-zinc-100">{mod.label}</h4>
-                <p className="text-[10px] text-[#000000] dark:text-[#64748B] mt-0.5">{mod.desc}</p>
+                <h4 className="text-xs font-bold text-[#0F172A] dark:text-zinc-100">{t(mod.label)}</h4>
+                <p className="text-[10px] text-[#000000] dark:text-[#64748B] mt-0.5">{t(mod.desc)}</p>
               </button>
             );
           })}

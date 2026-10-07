@@ -13,17 +13,14 @@ _ssl_ctx.check_hostname = False
 _ssl_ctx.verify_mode = ssl.CERT_NONE
 
 _engine_kwargs = {
-    # pool_pre_ping REMOVED — it fires a SELECT 1 round-trip on every checkout,
-    # adding ~200-400 ms per request when connecting to overseas Supabase.
-    # The transaction-mode pgbouncer pooler handles stale connections itself.
-    "pool_size": 10,        # keep 10 warm connections ready
-    "max_overflow": 10,     # allow burst to 20 total
-    "pool_recycle": 60,     # recycle before pgbouncer's server_idle_timeout (default 60 s)
-    "pool_timeout": 10,     # fail fast instead of hanging
+    "pool_size": 30,        # keep 30 warm connections ready
+    "max_overflow": 20,     # allow burst to 50 total
+    "pool_recycle": 300,    # recycle connections every 5 minutes
+    "pool_timeout": 30,     # 30-second timeout for pool checkout
     "connect_args": {
         "ssl": _ssl_ctx,
-        "timeout": 10,              # connection handshake timeout
-        "command_timeout": 30,      # per-statement timeout
+        "timeout": 15,              # connection handshake timeout
+        "command_timeout": 45,      # per-statement timeout
         "statement_cache_size": 0,  # required for pgbouncer transaction-mode pooler
     },
 }
@@ -47,4 +44,16 @@ Base = declarative_base()
 
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            raise
+        finally:
+            try:
+                await session.close()
+            except Exception:
+                pass

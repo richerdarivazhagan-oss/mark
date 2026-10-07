@@ -7,6 +7,8 @@ from app.models import User
 from app.core.config import settings
 
 
+import uuid
+
 async def get_current_user(
     authorization: str = Header(None),
     x_markup_key: str = Header(None, alias="X-Markup-Key"),
@@ -27,18 +29,25 @@ async def get_current_user(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    from sqlalchemy.orm import joinedload
+    result = await db.execute(
+        select(User)
+        .options(joinedload(User.department), joinedload(User.advising_department))
+        .where(User.id == str(user_id))
+    )
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
     # Validate role-specific API Keys
-    expected_key = f"MARKUP-{user.role.upper()}-2026"
-    if user.role == 'hod':
-        expected_key = "MARKUP-FACULTY-2026"  # HOD uses faculty key or specific HOD key? Let's use HOD key for strictness
-        expected_key = "MARKUP-HOD-2026"
+    role_str = user.role.value if hasattr(user.role, 'value') else str(user.role)
+    expected_key = f"MARKUP-{role_str.upper()}-2026"
+    valid_keys = {expected_key}
+    if role_str == 'hod':
+        valid_keys.add("MARKUP-FACULTY-2026")
+        valid_keys.add("MARKUP-HOD-2026")
 
-    if x_markup_key != expected_key:
+    if not x_markup_key or x_markup_key not in valid_keys:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid X-Markup-Key for this role")
 
     return user

@@ -5,8 +5,10 @@ from app.models.models import UserRole
 
 
 class LoginRequest(BaseModel):
-    username: str
+    username: Optional[str] = None
+    email: Optional[str] = None
     password: str
+    role: Optional[str] = None
 
 
 class Token(BaseModel):
@@ -68,6 +70,23 @@ class UserRead(BaseModel):
     last_login: Optional[str] = None
     password_reset_enabled: bool = False
     has_set_password: bool = False
+
+    # Student academic info
+    semester: Optional[int] = None
+    section: Optional[str] = None
+    batch: Optional[str] = None
+    programme: Optional[str] = None
+    year: Optional[int] = None
+    shift: Optional[str] = None
+
+    # Class Adviser Role & Assignment
+    is_class_adviser: bool = False
+    advising_department_id: Optional[str] = None
+    advising_department_name: Optional[str] = None
+    advising_year: Optional[int] = None
+    advising_section: Optional[str] = None
+    advising_programme: Optional[str] = None
+    advising_shift: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

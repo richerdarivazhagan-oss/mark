@@ -554,7 +554,38 @@ async def list_timetable(
         stmt = stmt.where(Timetable.day == day)
     result = await db.execute(stmt)
     slots = result.scalars().all()
-    return [await _format_timetable_slot(s, db) for s in slots]
+
+    user_rows = (await db.execute(select(User.id, User.name))).all()
+    user_map = {str(u[0]): u[1] for u in user_rows}
+
+    subj_rows = (await db.execute(select(Subject.id, Subject.code, Subject.name))).all()
+    subj_map = {str(s[0]): (s[1], s[2]) for s in subj_rows}
+
+    from app.core.utils import _fmt_time
+    formatted = []
+    for slot in slots:
+        s_id = str(slot.subject_id) if slot.subject_id else ""
+        f_id = str(slot.faculty_id) if slot.faculty_id else ""
+        d_id = str(slot.department_id) if slot.department_id else ""
+        s_code, s_name = subj_map.get(s_id, ("", ""))
+        f_name = user_map.get(f_id, "")
+        formatted.append(TimetableSlotRead(
+            id=str(slot.id),
+            day=slot.day if isinstance(slot.day, str) else str(slot.day),
+            period_number=slot.period_number,
+            start_time=_fmt_time(slot.start_time),
+            end_time=_fmt_time(slot.end_time),
+            subject_id=s_id,
+            subject_code=s_code,
+            subject_name=s_name,
+            faculty_id=f_id,
+            faculty_name=f_name,
+            room_no=slot.room_no or "",
+            department_id=d_id,
+            semester=slot.semester,
+            section=slot.section,
+        ))
+    return formatted
 
 
 @router.post("/timetable", response_model=TimetableSlotRead)

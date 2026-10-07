@@ -1,6 +1,8 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { CustomizationProvider } from './context/CustomizationContext';
+import { isSupabaseConfigured } from './lib/supabaseClient';
+import { AlertCircle } from 'lucide-react';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { BottomNav } from './components/common/BottomNav';
@@ -67,11 +69,28 @@ import { SettingsPage } from './components/common/SettingsPage';
 import { ForbiddenPage } from './components/common/ForbiddenPage';
 import { NotFoundPage } from './components/common/NotFoundPage';
 
+const ConfigErrorBanner: React.FC = () => {
+  if (isSupabaseConfigured) return null;
+  return (
+    <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-700 dark:text-amber-300 px-4 py-2 text-xs flex items-center justify-center gap-2 font-medium z-50 relative">
+      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+      <span>
+        Supabase configuration missing. Ensure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> are set in your <code>.env</code> file.
+      </span>
+    </div>
+  );
+};
+
 const AppContent: React.FC = () => {
   const { isAuthenticated, currentUser, activeScreen } = useApp();
 
   if (!isAuthenticated || activeScreen === 'login') {
-    return <LoginPage />;
+    return (
+      <>
+        <ConfigErrorBanner />
+        <LoginPage />
+      </>
+    );
   }
 
   const renderScreen = () => {
@@ -185,12 +204,16 @@ const AppContent: React.FC = () => {
   );
 };
 
+import { LanguageProvider } from './context/LanguageContext';
+
 export default function App() {
   return (
-    <AppProvider>
-      <CustomizationProvider>
-        <AppContent />
-      </CustomizationProvider>
-    </AppProvider>
+    <LanguageProvider>
+      <AppProvider>
+        <CustomizationProvider>
+          <AppContent />
+        </CustomizationProvider>
+      </AppProvider>
+    </LanguageProvider>
   );
 }

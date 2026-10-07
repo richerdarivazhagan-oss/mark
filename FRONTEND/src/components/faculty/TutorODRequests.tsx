@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { rankedSearch } from '../../utils/searchRank';
 import { Calendar, User, CheckCircle2, XCircle, Search, Award } from 'lucide-react';
 
 export const TutorODRequests: React.FC = () => {
@@ -9,14 +10,9 @@ export const TutorODRequests: React.FC = () => {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Filter for class adviser view (shows pending_class_adviser and their history)
-  const filteredRequests = odRequests.filter((req) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      req.studentName.toLowerCase().includes(q) ||
-      req.studentRegNo.toLowerCase().includes(q) ||
-      req.reason.toLowerCase().includes(q)
-    );
-  });
+  const filteredRequests = searchQuery.trim()
+    ? rankedSearch(odRequests, searchQuery, [(req) => req.studentName, (req) => req.studentRegNo, (req) => req.reason])
+    : odRequests;
 
   const handleReview = async (id: string, status: 'recommended' | 'rejected') => {
     setProcessingId(id);

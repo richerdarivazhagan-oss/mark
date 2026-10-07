@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { AuditLog } from '../../types';
+import { rankedSearch } from '../../utils/searchRank';
 import { Modal } from '../common/Modal';
 import { BackButton } from '../common/BackButton';
 import { ShieldAlert, Search, Code, User, Clock, Terminal } from 'lucide-react';
@@ -10,13 +11,9 @@ export const AuditLogs: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  const filtered = auditLogs.filter(
-    (log) =>
-      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.module.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = searchTerm.trim()
+    ? rankedSearch(auditLogs, searchTerm, [(log) => log.action, (log) => log.userName, (log) => log.module, (log) => log.details])
+    : auditLogs;
 
   return (
     <div className="space-y-6">

@@ -264,9 +264,7 @@ async def faculty_monitoring(
         dept_name = ""
         if fac.department_id:
             dept_result = await db.execute(select(Department.name).where(Department.id == fac.department_id))
-            dept = dept_result.scalar_one_or_none()
-            if dept:
-                dept_name = dept.name
+            dept_name = dept_result.scalar_one_or_none() or ""
 
         output.append(FacultyMonitoring(
             faculty_id=str(fac.id), faculty_name=fac.name,
@@ -428,8 +426,8 @@ async def list_recommended_od_requests(
     current_user: User = Depends(require_role("hod")),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(OdRequest).where(
-        OdRequest.department_id == current_user.department_id,
+    stmt = select(OdRequest).join(User, OdRequest.student_id == User.id).where(
+        User.department_id == current_user.department_id,
         OdRequest.status == OdRequestStatus.recommended
     ).order_by(OdRequest.created_at.desc())
     result = await db.execute(stmt)

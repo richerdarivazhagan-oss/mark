@@ -16,6 +16,7 @@ from app.schemas import (
     FacultyDashboard, LeaveRequestRead, LeaveReview,
     SubstitutionRequestCreate, SubstitutionRequestRead, SubstitutionReview,
     CorrectionRequestCreate, CorrectionRequestRead, CorrectionReview,
+    SubjectRead,
 )
 from app.services.attendance import get_active_periods_for_faculty
 from app.services.audit import create_audit_log
@@ -239,7 +240,7 @@ async def student_search(
     return [await format_student(u, db) for u in users]
 
 
-@router.get("/subjects", response_model=list[dict])
+@router.get("/subjects", response_model=list[SubjectRead])
 async def faculty_subjects(
     current_user: User = Depends(require_role("faculty", "hod")),
     db: AsyncSession = Depends(get_db),

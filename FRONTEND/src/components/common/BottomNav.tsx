@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
-  const { currentUser, activeScreen, setActiveScreen } = useApp();
+  const { currentUser, activeScreen, setActiveScreen, t } = useApp();
 
   const role = currentUser.role;
 
@@ -64,11 +64,32 @@ export const BottomNav: React.FC = () => {
 
   const items = getMobileItems();
 
+  // Map raw English labels to nav translation keys
+  const navKeyMap: Record<string, string> = {
+    'Dashboard': 'nav.dashboard',
+    'Students': 'nav.students',
+    'Faculty': 'nav.faculty',
+    'Schedule': 'nav.schedule',
+    'Themes': 'nav.themes',
+    'Home': 'nav.home',
+    'My Classes': 'nav.myClasses',
+    'Leaves': 'nav.leaves',
+    'Bonafide': 'nav.bonafide',
+    'Attendance': 'nav.myAttendance',
+    'Apply Leave': 'nav.applyLeave',
+    'Timetable': 'nav.timetable',
+    'Circulars': 'nav.circulars',
+    'Student Details': 'nav.studentDetails',
+    'All Classes': 'nav.allClasses',
+  };
+
   return (
     <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-[#0A0F1E]/95 backdrop-blur-md border-t border-[#E2E8F0] dark:border-zinc-800 md:hidden px-1 py-1 flex items-center shadow-lg overflow-x-auto no-scrollbar">
       {items.map((item) => {
         const Icon = item.icon;
         const isActive = activeScreen === item.id;
+        const labelKey = navKeyMap[item.label];
+        const translatedLabel = labelKey ? t(labelKey, item.label) : t(item.label);
         return (
           <button
             key={item.id}
@@ -80,7 +101,7 @@ export const BottomNav: React.FC = () => {
             }`}
           >
             <Icon className="w-5 h-5" />
-            <span>{item.label}</span>
+            <span>{translatedLabel}</span>
           </button>
         );
       })}

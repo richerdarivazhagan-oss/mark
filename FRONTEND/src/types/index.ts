@@ -21,7 +21,7 @@ export interface User {
   rollNo?: string;
   batch?: string;
   programme?: 'UG' | 'PG';
-  year?: number;
+  year?: number | string;
   shift?: string;
   guardianName?: string;
   guardianPhone?: string;
@@ -35,6 +35,14 @@ export interface User {
   active: boolean;
   lastLogin?: string;
   profileSubmitted?: boolean;
+  is_class_adviser?: boolean;
+  isClassAdviser?: boolean;
+  advisingDepartmentId?: string;
+  advising_department_id?: string;
+  advisingSection?: string;
+  advising_section?: string;
+  advisingYear?: number;
+  advising_year?: number;
 }
 
 export interface Student {
@@ -51,7 +59,7 @@ export interface Student {
   batch: string;
   // Master structure (Programme -> Department -> Year -> Shift).
   programme?: 'UG' | 'PG';
-  year?: number;   // 1, 2, 3, 4
+  year?: number | string;
   shift?: string;  // 'First Shift' | 'Second Shift'
   overallAttendancePct: number;
   guardianName: string;
@@ -251,13 +259,19 @@ export interface CalendarEvent {
   title: string;
   description?: string;
   dayOrder?: number; // Day order number for working days, synced from staff day order schedule
+  dayName?: string; // Tamil day name from Monthly Staff Order
+  leaveHolidayRemark?: string; // Remark/leave/holiday text from middle column
+  workingDayCount?: number; // Cumulative working day count from last column
 }
 
 // A single date → Day Order mapping extracted from an uploaded monthly schedule image.
 // Also supports holiday/leave entries extracted from the day order.
 export interface DayOrderEntry {
   date: string; // YYYY-MM-DD
-  dayOrder?: number; // 1, 2, 3, ... (undefined if holiday/leave)
+  dayName?: string; // Tamil day name e.g. "ஞாயிறு", "திங்கள்", etc.
+  dayOrder?: number; // 1, 2, 3, 4, 5, 6 (undefined if -)
+  workingDayCount?: number; // e.g. 75, 76, 77, 78... (undefined if -)
+  remark?: string; // Middle column text e.g. "விடுமுறை", "அரசு விடுமுறை", etc.
   isHoliday?: boolean; // true if this date is a holiday/leave
   holidayTitle?: string; // e.g. "Weekly Off", "Compensatory Holiday"
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 import {
   Programme,
   Shift,
@@ -42,6 +43,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
   onClear,
   compact = false
 }) => {
+  const { t } = useLanguage();
   const [programme, setProgramme] = useState<Programme | ''>(initial?.programme || '');
   const [departmentId, setDepartmentId] = useState<string>(initial?.departmentId || '');
   const [year, setYear] = useState<string>(initial?.year || '');
@@ -112,7 +114,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
     <div className="flex flex-wrap items-center gap-3">
       {showProgramme && (
         <div className="flex items-center gap-2">
-          <label className={labelClass}>Programme:</label>
+          <label className={labelClass}>{t('Programme:')}</label>
           <select
             value={programme}
             disabled={!!lockedProgramme}
@@ -122,7 +124,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
             }}
             className={selectClass}
           >
-            <option value="">Select Programme</option>
+            <option value="">{t('Select Programme', 'Select Programme')}</option>
             {(['UG', 'PG'] as Programme[]).map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -134,7 +136,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
 
       {(
         <div className="flex items-center gap-2">
-          <label className={labelClass}>Department:</label>
+          <label className={labelClass}>{t('Department:')}</label>
           <select
             value={departmentId}
             disabled={!programme || !!lockedDepartmentId}
@@ -145,7 +147,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
             className={selectClass}
           >
             <option value="">
-              {programme ? `Select ${programme} Department` : 'Select Programme first'}
+              {programme ? `Select ${programme} Department` : t('Select Programme first', 'Select Programme first')}
             </option>
             {deptOptions.map((d) => (
               <option key={d.id} value={d.id}>
@@ -158,7 +160,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
 
       {(
         <div className="flex items-center gap-2">
-          <label className={labelClass}>Year:</label>
+          <label className={labelClass}>{t('Year:')}</label>
           <select
             value={year}
             disabled={!departmentId}
@@ -168,7 +170,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
             }}
             className={selectClass}
           >
-            <option value="">{departmentId ? `Select ${programme} Year` : 'Select Department first'}</option>
+            <option value="">{departmentId ? `Select ${programme} Year` : t('Select Department first', 'Select Department first')}</option>
             {yearOptions.map((y) => (
               <option key={y} value={y}>
                 {y}
@@ -180,7 +182,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
 
       {(
         <div className="flex items-center gap-2">
-          <label className={labelClass}>Shift:</label>
+          <label className={labelClass}>{t('Shift:')}</label>
           <select
             value={shift}
             disabled={!year}
@@ -190,7 +192,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
             }}
             className={selectClass}
           >
-            <option value="">{year ? 'Select Shift' : 'Select Year first'}</option>
+            <option value="">{year ? t('Select Shift', 'Select Shift') : t('Select Year first', 'Select Year first')}</option>
             {shiftOptions.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -205,7 +207,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
         onClick={handleSearch}
         className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-[#2563EB] dark:bg-[#2563EB] hover:bg-[#161B33] dark:hover:bg-[#2563EB] rounded-xl transition-colors shrink-0"
       >
-        <Search className="w-3.5 h-3.5" /> Search
+        <Search className="w-3.5 h-3.5" /> {t('Search')}
       </button>
 
       {showClear && (
@@ -214,7 +216,7 @@ export const MasterFilter: React.FC<MasterFilterProps> = ({
           onClick={handleClear}
           className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-[#000000] dark:text-[#64748B] bg-[#F7F9FC] dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-xl transition-colors shrink-0"
         >
-          <X className="w-3.5 h-3.5" /> Clear
+          <X className="w-3.5 h-3.5" /> {t('Clear')}
         </button>
       )}
 

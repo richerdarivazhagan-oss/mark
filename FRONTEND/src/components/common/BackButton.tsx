@@ -8,14 +8,14 @@ interface BackButtonProps {
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({ targetScreen = 'dashboard', label = 'Back' }) => {
-  const { setActiveScreen } = useApp();
+  const { setActiveScreen, t } = useApp();
 
   return (
     <button
       onClick={() => setActiveScreen(targetScreen)}
       className="flex items-center gap-2 text-xs font-bold text-[#2563EB] dark:text-[#3B82F6] hover:underline"
     >
-      <ArrowLeft className="w-4 h-4" /> {label}
+      <ArrowLeft className="w-4 h-4" /> {t(label)}
     </button>
   );
 };

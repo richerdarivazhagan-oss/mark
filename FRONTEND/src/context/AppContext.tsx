@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import {
   User,
   UserRole,
@@ -17,6 +17,7 @@ import {
   BackupSnapshot,
   AppNotification,
   Circular,
+  CircularTarget,
   CircularStatus,
   PeriodTiming,
   StaffDayOrder,
@@ -26,6 +27,9 @@ import {
 } from '../types';
 import { apiClient, setJwt, clearJwt } from '../lib/apiClient';
 import { studentsForCircular } from '../services/circularTargeting';
+import { mockCalendarEvents, mockStaffDayOrders } from '../mock/data';
+import { useLanguage } from './LanguageContext';
+import { Language } from '../i18n/translations';
 
 export interface ToastMessage {
   id: string;
@@ -61,8 +65,13 @@ interface AppContextType {
   commandPaletteOpen: boolean;
   toasts: ToastMessage[];
 
+  // Language & i18n
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string, fallback?: string) => string;
+
   // Actions
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, role?: UserRole) => Promise<void>;
   setAttendanceSubjectId: (subjectId: string | null) => void;
   logout: () => void;
   switchRole: (role: UserRole) => Promise<void>;
@@ -149,6 +158,9 @@ interface AppContextType {
   ) => void;
   deleteBonafideRequest: (id: string) => void;
   canDeleteBonafideRequest: (request: BonafideRequest) => boolean;
+
+  selectedCalendarMonth: string;
+  setSelectedCalendarMonth: (ym: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -167,6 +179,7 @@ function normalizeTimetableSlot(raw: any): TimetableSlot {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { language, setLanguage, t } = useLanguage();
   const [currentUser, setCurrentUserState] = useState<User>({} as User);
 
   const [users, setUsers] = useState<User[]>([]);
@@ -188,8 +201,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [odRequests, setOdRequests] = useState<any[]>([]); // Student/Faculty/HOD OD state
   const [correctionRequests, setCorrectionRequests] = useState<CorrectionRequest[]>([]);
   const [substitutionRequests, setSubstitutionRequests] = useState<SubstitutionRequest[]>([]);
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [staffDayOrders, setStaffDayOrders] = useState<StaffDayOrder[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(mockCalendarEvents);
+  const [staffDayOrders, setStaffDayOrders] = useState<StaffDayOrder[]>(mockStaffDayOrders);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [backups, setBackups] = useState<BackupSnapshot[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -210,6 +223,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [attendanceSubjectId, setAttendanceSubjectId] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<string>('2026-09');
 
   // Apply theme ONLY to authenticated portal pages.
   // The Login Page must stay in its original design and must never be themed.
@@ -246,6 +260,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
   }, [isAuthenticated, currentUser?.role]);
+
+
 
   // Apply color palette theme (accent palettes kept for backwards compatibility)
   useEffect(() => {
@@ -438,53 +454,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         load(() => apiClient.subjects(), setSubjects),
         load(async () => (await apiClient.adminTimetable()).map(normalizeTimetableSlot), setTimetable),
         load(() => apiClient.calendarEvents(), setCalendarEvents),
+        load(() => apiClient.circulars(), setCirculars),
         load(() => apiClient.auditLogs(), setAuditLogs),
         load(() => apiClient.backups(), setBackups),
         load(() => apiClient.notifications({ unreadOnly: false }), setNotifications),
         load(() => apiClient.users(), setUsers),
+        load(() => apiClient.bonafideRequests(), setBonafideRequests),
+        load(() => apiClient.dayOrders(), setStaffDayOrders),
       ]);
     } else if (role === 'hod') {
-      const [hodStudents, monitoring, hodClasses] = await Promise.all([
-        apiClient.facultyStudentSearch(),
-        apiClient.hodMonitoring(),
-        apiClient.hodAllClasses(),
-      ]);
-      setStudents(hodStudents);
-      setFacultyList(monitoring.map((item: any) => ({
-        id: item.facultyId,
-        employeeId: '',
-        name: item.facultyName,
-        email: '',
-        departmentId: user.departmentId || '',
-        departmentName: item.departmentName,
-        phone: '',
-        assignedSubjectIds: (item.subjects || []).map((subject: any) => subject.id),
-        active: true,
-      })));
-      setTimetable(hodClasses.map((item: any, index: number) => ({
-        id: `${item.day}-${item.period}-${item.subjectCode}-${index}`,
-        day: item.day,
-        periodNumber: item.period,
-        startTime: item.start,
-        endTime: item.end,
-        subjectId: '',
-        subjectCode: item.subjectCode,
-        subjectName: item.subjectName,
-        facultyId: '',
-        facultyName: item.facultyName,
-        departmentId: user.departmentId || '',
-        semester: item.semester,
-        section: item.section,
-        classroom: item.room,
-      })));
       await Promise.all([
+        load(async () => {
+          const hodStudents = await apiClient.facultyStudentSearch().catch(() => []);
+          setStudents(hodStudents);
+        }, () => {}),
+        load(async () => {
+          const monitoring = await apiClient.hodMonitoring().catch(() => []);
+          setFacultyList(monitoring.map((item: any) => ({
+            id: item.facultyId,
+            employeeId: '',
+            name: item.facultyName,
+            email: '',
+            departmentId: user.departmentId || '',
+            departmentName: item.departmentName,
+            phone: '',
+            assignedSubjectIds: (item.subjects || []).map((subject: any) => subject.id),
+            active: true,
+          })));
+        }, () => {}),
+        load(async () => {
+          const hodClasses = await apiClient.hodAllClasses().catch(() => []);
+          setTimetable(hodClasses.map((item: any, index: number) => ({
+            id: `${item.day}-${item.period}-${item.subjectCode}-${index}`,
+            day: item.day,
+            periodNumber: item.period,
+            startTime: item.start,
+            endTime: item.end,
+            subjectId: '',
+            subjectCode: item.subjectCode,
+            subjectName: item.subjectName,
+            facultyId: '',
+            facultyName: item.facultyName,
+            departmentId: user.departmentId || '',
+            semester: item.semester,
+            section: item.section,
+            classroom: item.room,
+          })));
+        }, () => {}),
         load(() => apiClient.departments(), setDepartments),
         load(() => apiClient.subjects(), setSubjects),
+        load(() => apiClient.circulars(), setCirculars),
         load(() => apiClient.hodCorrections(), setCorrectionRequests),
         load(() => apiClient.hodLeaves(), setLeaveRequests),
         load(() => apiClient.hodOdRequests(), setOdRequests),
         load(() => apiClient.hodSubstitutions(), setSubstitutionRequests),
         load(() => apiClient.notifications({ unreadOnly: false }), setNotifications),
+        load(() => apiClient.bonafideRequests(), setBonafideRequests),
+        load(() => apiClient.dayOrders(), setStaffDayOrders),
       ]);
     } else if (role === 'faculty') {
       await Promise.all([
@@ -497,75 +523,132 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         load(() => apiClient.facultySubstitutions(), setSubstitutionRequests),
         load(() => apiClient.facultyCorrections(), setCorrectionRequests),
         load(() => apiClient.calendarEvents(), setCalendarEvents),
+        load(() => apiClient.circulars(), setCirculars),
         load(() => apiClient.notifications({ unreadOnly: false }), setNotifications),
         load(() => apiClient.users(), setUsers),
+        load(() => apiClient.bonafideRequests(), setBonafideRequests),
+        load(() => apiClient.dayOrders(), setStaffDayOrders),
       ]);
     } else if (role === 'student') {
-      const [studentSubjects, studentTimetable] = await Promise.all([
-        apiClient.studentSubjects(),
-        apiClient.studentTimetable(),
-      ]);
-      setSubjects(studentSubjects);
-      setTimetable(studentTimetable.map(normalizeTimetableSlot));
       await Promise.all([
+        load(async () => {
+          const studentSubjects = await apiClient.studentSubjects().catch(() => []);
+          setSubjects(studentSubjects);
+        }, () => {}),
+        load(async () => {
+          const studentTimetable = await apiClient.studentTimetable().catch(() => []);
+          setTimetable(studentTimetable.map(normalizeTimetableSlot));
+        }, () => {}),
         load(() => apiClient.departments(), setDepartments),
+        load(() => apiClient.circulars(), setCirculars),
         load(() => apiClient.studentLeaves(), setLeaveRequests),
         load(() => apiClient.odRequests(), setOdRequests),
         load(() => apiClient.notifications({ unreadOnly: false }), setNotifications),
         load(() => apiClient.users(), setUsers),
+        load(() => apiClient.bonafideRequests(), setBonafideRequests),
+        load(() => apiClient.dayOrders(), setStaffDayOrders),
+        load(async () => {
+          try {
+            const history = await apiClient.studentAttendanceHistory();
+            const records = history.map((entry: any, index: number) => ({
+              id: `${entry.date}-${entry.periodNumber}-${entry.subjectCode}-${index}`,
+              date: entry.date,
+              periodNumber: entry.periodNumber,
+              subjectId: '',
+              subjectCode: entry.subjectCode,
+              subjectName: entry.subjectName,
+              facultyId: '',
+              facultyName: entry.facultyName,
+              departmentId: user.departmentId || '',
+              semester: user.semester || 0,
+              section: user.section || '',
+              entries: [{
+                studentId: user.id,
+                studentRegNo: user.regNo || '',
+                studentName: user.name,
+                status: entry.status,
+                remarks: entry.remarks,
+              }],
+              totalStudents: 1,
+              presentCount: ['present', 'late', 'od'].includes(entry.status) ? 1 : 0,
+              absentCount: ['present', 'late', 'od'].includes(entry.status) ? 0 : 1,
+              lateCount: entry.status === 'late' ? 1 : 0,
+              odCount: entry.status === 'od' ? 1 : 0,
+              leaveCount: entry.status === 'leave' ? 1 : 0,
+              submittedAt: entry.markedAt || '',
+            } as AttendanceRecord));
+            setAttendanceRecords(records);
+          } catch {
+            setAttendanceRecords([]);
+          }
+        }, () => {}),
       ]);
-      try {
-        const history = await apiClient.studentAttendanceHistory();
-        const subjectByCode = new Map(studentSubjects.map((subject: any) => [subject.code, subject]));
-        const records = history.map((entry: any, index: number) => {
-          const subject = subjectByCode.get(entry.subjectCode);
-          const present = ['present', 'late', 'od'].includes(entry.status);
-          return {
-            id: `${entry.date}-${entry.periodNumber}-${entry.subjectCode}-${index}`,
-            date: entry.date,
-            periodNumber: entry.periodNumber,
-            subjectId: subject?.id || '',
-            subjectCode: entry.subjectCode,
-            subjectName: entry.subjectName,
-            facultyId: '',
-            facultyName: entry.facultyName,
-            departmentId: user.departmentId || '',
-            semester: user.semester || 0,
-            section: user.section || '',
-            entries: [{
-              studentId: user.id,
-              studentRegNo: user.regNo || '',
-              studentName: user.name,
-              status: entry.status,
-              remarks: entry.remarks,
-            }],
-            totalStudents: 1,
-            presentCount: present ? 1 : 0,
-            absentCount: present ? 0 : 1,
-            lateCount: entry.status === 'late' ? 1 : 0,
-            odCount: entry.status === 'od' ? 1 : 0,
-            leaveCount: entry.status === 'leave' ? 1 : 0,
-            submittedAt: entry.markedAt || '',
-          } as AttendanceRecord;
-        });
-        setAttendanceRecords(records);
-      } catch {
-        setAttendanceRecords([]);
-      }
     }
-
-    // Load new DB-backed data for all roles
-    await Promise.all([
-      load(() => apiClient.circulars(), setCirculars),
-      load(() => apiClient.bonafideRequests(), setBonafideRequests),
-      load(() => apiClient.dayOrders(), setStaffDayOrders),
-    ]);
   }, [currentUser]);
 
+  // Restore authenticated session on initial mount / page refresh
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const storedToken = localStorage.getItem('smart_att_token');
+        const isAuthed = localStorage.getItem('smart_att_authed') === 'true';
+        if (!storedToken || !isAuthed) return;
 
-  const login = useCallback(async (username: string, password: string) => {
+        const apiUser = await apiClient.me();
+        if (apiUser && apiUser.role) {
+          const mappedUser: User = {
+            id: apiUser.id,
+            name: apiUser.name,
+            email: apiUser.email,
+            avatar: apiUser.avatar,
+            role: apiUser.role,
+            departmentId: apiUser.departmentId || (apiUser as any).department_id,
+            departmentName: apiUser.departmentName || (apiUser as any).department_name,
+            regNo: apiUser.regNo || (apiUser as any).reg_no,
+            employeeId: apiUser.employeeId || (apiUser as any).employee_id,
+            phone: apiUser.phone,
+            address: apiUser.address,
+            gender: apiUser.gender,
+            dob: apiUser.dob,
+            fatherName: apiUser.fatherName || (apiUser as any).father_name,
+            motherName: apiUser.motherName || (apiUser as any).mother_name,
+            parentPhone: apiUser.parentPhone || (apiUser as any).parent_phone,
+            active: apiUser.active !== undefined ? apiUser.active : true,
+            lastLogin: apiUser.lastLogin || (apiUser as any).last_login,
+            semester: apiUser.semester,
+            section: apiUser.section,
+            batch: apiUser.batch,
+            programme: apiUser.programme,
+            year: apiUser.year,
+            shift: apiUser.shift,
+            is_class_adviser: (apiUser as any).is_class_adviser ?? (apiUser as any).isClassAdviser ?? false,
+            isClassAdviser: (apiUser as any).is_class_adviser ?? (apiUser as any).isClassAdviser ?? false,
+            advisingDepartmentId: (apiUser as any).advising_department_id || (apiUser as any).advisingDepartmentId,
+            advising_department_id: (apiUser as any).advising_department_id || (apiUser as any).advisingDepartmentId,
+            advisingSection: (apiUser as any).advising_section || (apiUser as any).advisingSection,
+            advising_section: (apiUser as any).advising_section || (apiUser as any).advisingSection,
+            advisingYear: (apiUser as any).advising_year || (apiUser as any).advisingYear,
+            advising_year: (apiUser as any).advising_year || (apiUser as any).advisingYear,
+          };
+          setCurrentUserState(mappedUser);
+          setIsAuthenticated(true);
+          loadDataForRole(apiUser.role, mappedUser);
+        }
+      } catch {
+        clearJwt();
+        setCurrentUserState({} as User);
+        setIsAuthenticated(false);
+        localStorage.setItem('smart_att_authed', 'false');
+      }
+    };
+
+    restoreSession();
+  }, [loadDataForRole]);
+
+
+  const login = useCallback(async (username: string, password: string, role?: UserRole) => {
     try {
-      const response = await apiClient.login(username, password);
+      const response = await apiClient.login(username, password, role);
       const token = response.accessToken ?? response.access_token;
       if (!token) {
         throw new Error('Backend did not return a JWT token');
@@ -573,25 +656,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setJwt(token);
       const apiUser = response.user;
+      localStorage.setItem('smart_att_role', apiUser.role);
       const mappedUser: User = {
         id: apiUser.id,
         name: apiUser.name,
         email: apiUser.email,
         avatar: apiUser.avatar,
         role: apiUser.role,
-        departmentId: apiUser.departmentId,
-        departmentName: apiUser.departmentName,
-        regNo: apiUser.regNo,
-        employeeId: apiUser.employeeId,
+        departmentId: apiUser.departmentId || (apiUser as any).department_id,
+        departmentName: apiUser.departmentName || (apiUser as any).department_name,
+        regNo: apiUser.regNo || (apiUser as any).reg_no,
+        employeeId: apiUser.employeeId || (apiUser as any).employee_id,
         phone: apiUser.phone,
         address: apiUser.address,
         gender: apiUser.gender,
         dob: apiUser.dob,
-        fatherName: apiUser.fatherName,
-        motherName: apiUser.motherName,
-        parentPhone: apiUser.parentPhone,
-        active: apiUser.active,
-        lastLogin: apiUser.lastLogin,
+        fatherName: apiUser.fatherName || (apiUser as any).father_name,
+        motherName: apiUser.motherName || (apiUser as any).mother_name,
+        parentPhone: apiUser.parentPhone || (apiUser as any).parent_phone,
+        active: apiUser.active !== undefined ? apiUser.active : true,
+        lastLogin: apiUser.lastLogin || (apiUser as any).last_login,
+        // Student academic information
+        semester: apiUser.semester,
+        section: apiUser.section,
+        batch: apiUser.batch,
+        programme: apiUser.programme,
+        year: apiUser.year,
+        shift: apiUser.shift,
+        // Class Adviser mapping
+        is_class_adviser: (apiUser as any).is_class_adviser ?? (apiUser as any).isClassAdviser ?? false,
+        isClassAdviser: (apiUser as any).is_class_adviser ?? (apiUser as any).isClassAdviser ?? false,
+        advisingDepartmentId: (apiUser as any).advising_department_id || (apiUser as any).advisingDepartmentId,
+        advising_department_id: (apiUser as any).advising_department_id || (apiUser as any).advisingDepartmentId,
+        advisingSection: (apiUser as any).advising_section || (apiUser as any).advisingSection,
+        advising_section: (apiUser as any).advising_section || (apiUser as any).advisingSection,
+        advisingYear: (apiUser as any).advising_year || (apiUser as any).advisingYear,
+        advising_year: (apiUser as any).advising_year || (apiUser as any).advisingYear,
       };
       setCurrentUserState(mappedUser);
       setIsAuthenticated(true);
@@ -599,22 +699,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveScreen('dashboard');
       await loadDataForRole(apiUser.role, mappedUser);
       addToast('Login Successful', `Welcome back, ${apiUser.name}`, 'success');
-      localStorage.setItem('smart_att_role', apiUser.role);
     } catch (error: any) {
       console.error('Login error:', error);
       clearJwt();
       setIsAuthenticated(false);
-      addToast('Login Failed', error instanceof Error ? error.message : 'Invalid credentials', 'danger');
-      throw error;
+      let msg = error instanceof Error ? error.message : 'Invalid role or credentials.';
+      if (msg.toLowerCase().includes('failed to fetch')) {
+        const apiOrigin = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api';
+        msg = `Network Error: Unable to connect to the authentication server at ${apiOrigin}. Please verify that your backend server is running and accessible.`;
+      }
+      addToast('Login Failed', msg, 'danger');
+      throw new Error(msg);
     }
   }, [loadDataForRole]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      if (isSupabaseConfigured) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.warn('Supabase auth signout error:', e);
+    }
     clearJwt();
     localStorage.removeItem('smart_att_role');
+    localStorage.removeItem('smart_att_token');
+    localStorage.removeItem('smart_att_authed');
     setCurrentUserState({} as User);
     setIsAuthenticated(false);
-    localStorage.setItem('smart_att_authed', 'false');
     setActiveScreen('login');
     addToast('Signed Out', 'You have been logged out safely', 'info');
   }, []);
@@ -1262,50 +1374,169 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Sync staff day order entries → calendar events (local upsert; calendar CRUD stays API-backed).
-  const syncStaffDayOrderToCalendar = (entries: DayOrderEntry[]) => {
-    setCalendarEvents((prev) => {
-      const next = [...prev];
-      const upsert = (date: string, type: 'holiday' | 'working', title: string, description: string, dayOrder?: number) => {
-        const existingIdx = next.findIndex((e) => e.date === date && e.type === type);
-        const ev: CalendarEvent = {
-          id: existingIdx >= 0 ? next[existingIdx].id : 'cal-sync-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-          date,
-          type,
-          title,
-          description,
-          dayOrder,
-        };
-        if (existingIdx >= 0) {
-          next[existingIdx] = ev;
-        } else {
-          next.push(ev);
-        }
-      };
+  const syncStaffDayOrderToCalendar = async (entries: DayOrderEntry[]) => {
+    const romanMap = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+    const syncedEvents: CalendarEvent[] = [];
+    const dbRowsToUpsert: any[] = [];
 
-      for (const entry of entries) {
-        if (entry.isHoliday) {
-          upsert(entry.date, 'holiday', entry.holidayTitle || 'Holiday', 'Synced from Day Order');
-        }
-        if (entry.dayOrder != null) {
-          upsert(entry.date, 'working', `Day Order ${entry.dayOrder}`, 'Synced from Day Order', entry.dayOrder);
+    const generateUuid = () => {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+      return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c: any) =>
+        (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+      );
+    };
+
+    for (const entry of entries) {
+      if (!entry.date || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) continue;
+
+      // 1. Leave / Holiday / Event Remark (Middle column)
+      if (entry.isHoliday || (entry.remark && entry.remark.trim() !== '' && entry.remark.trim() !== '-')) {
+        const titleText = entry.holidayTitle || entry.remark || 'விடுமுறை';
+        const isExam = /தேர்வு|marks|exam/i.test(titleText);
+        const evType: CalendarEvent['type'] = entry.isHoliday ? (isExam ? 'exam' : 'holiday') : 'event';
+        const eventUuid = generateUuid();
+
+        const ev: CalendarEvent = {
+          id: eventUuid,
+          date: entry.date,
+          type: evType,
+          title: titleText,
+          description: 'Synced from Monthly Staff Order',
+          dayName: entry.dayName,
+          leaveHolidayRemark: entry.remark || titleText,
+          workingDayCount: typeof entry.workingDayCount === 'number' ? entry.workingDayCount : undefined,
+          dayOrder: typeof entry.dayOrder === 'number' && entry.dayOrder >= 1 && entry.dayOrder <= 6 ? entry.dayOrder : undefined,
+        };
+
+        syncedEvents.push(ev);
+
+        dbRowsToUpsert.push({
+          id: eventUuid,
+          date: entry.date,
+          type: evType,
+          title: titleText,
+          description: 'Synced from Monthly Staff Order',
+          day_order: typeof entry.dayOrder === 'number' ? entry.dayOrder : null,
+          working_day_count: typeof entry.workingDayCount === 'number' ? entry.workingDayCount : null,
+          day_name: entry.dayName || null,
+          leave_holiday_remark: entry.remark || titleText,
+        });
+
+        if (apiClient?.createCalendarEvent) {
+          try {
+            const apiRes = await apiClient.createCalendarEvent({
+              date: entry.date,
+              type: evType,
+              title: titleText,
+              description: 'Synced from Monthly Staff Order'
+            });
+            if (apiRes?.id) ev.id = String(apiRes.id);
+          } catch {
+            // Proceed with local state fallback
+          }
         }
       }
-      return next;
+
+      // 2. Day Order (1-6)
+      if (typeof entry.dayOrder === 'number' && entry.dayOrder >= 1 && entry.dayOrder <= 6) {
+        const roman = romanMap[entry.dayOrder] || String(entry.dayOrder);
+        const workingTitle = entry.remark && entry.remark.trim() !== '' && entry.remark.trim() !== '-' && !entry.isHoliday
+          ? `${entry.remark} (Day Order ${roman})`
+          : `Day Order ${roman}`;
+        const workingUuid = generateUuid();
+
+        const ev: CalendarEvent = {
+          id: workingUuid,
+          date: entry.date,
+          type: 'working',
+          title: workingTitle,
+          description: 'Synced from Monthly Staff Order',
+          dayOrder: entry.dayOrder,
+          dayName: entry.dayName,
+          leaveHolidayRemark: entry.remark,
+          workingDayCount: typeof entry.workingDayCount === 'number' ? entry.workingDayCount : undefined,
+        };
+
+        syncedEvents.push(ev);
+
+        dbRowsToUpsert.push({
+          id: workingUuid,
+          date: entry.date,
+          type: 'working',
+          title: workingTitle,
+          description: 'Synced from Monthly Staff Order',
+          day_order: entry.dayOrder,
+          working_day_count: typeof entry.workingDayCount === 'number' ? entry.workingDayCount : null,
+          day_name: entry.dayName || null,
+          leave_holiday_remark: entry.remark || null,
+        });
+
+        if (apiClient?.createCalendarEvent) {
+          try {
+            const apiRes = await apiClient.createCalendarEvent({
+              date: entry.date,
+              type: 'working',
+              title: workingTitle,
+              description: 'Synced from Monthly Staff Order'
+            });
+            if (apiRes?.id) ev.id = String(apiRes.id);
+          } catch {
+            // Proceed with local state fallback
+          }
+        }
+        if (apiClient?.createDayOrder) {
+          try {
+            await apiClient.createDayOrder({
+              date: entry.date,
+              dayNumber: entry.dayOrder,
+              label: workingTitle,
+              notes: 'Synced from Monthly Staff Order'
+            });
+          } catch {
+            // Proceed with local state fallback
+          }
+        }
+      }
+    }
+
+    // Persist rows directly to Supabase calendar_events table if configured
+    if (isSupabaseConfigured && dbRowsToUpsert.length > 0) {
+      try {
+        const { error: sbErr } = await supabase
+          .from('calendar_events')
+          .upsert(dbRowsToUpsert, { onConflict: 'id' });
+        if (sbErr) {
+          console.error('[Supabase Error] calendar_events upsert warning:', sbErr.message);
+        }
+      } catch (err) {
+        console.error('[Supabase Error] Exception writing to calendar_events:', err);
+      }
+    }
+
+    // Update calendarEvents state in React
+    setCalendarEvents((prev) => {
+      const datesToSync = new Set(entries.map((e) => e.date));
+      const filteredPrev = prev.filter((e) => !datesToSync.has(e.date) || !e.description?.includes('Synced from'));
+      return [...filteredPrev, ...syncedEvents];
     });
   };
 
-  // Day Order persistence is now handled via Supabase Realtime (no localStorage)
-
-  const saveStaffDayOrder = (data: Omit<StaffDayOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const saveStaffDayOrder = async (data: Omit<StaffDayOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const trimmedEntries = data.entries
       .map((e) => ({
         date: e.date,
-        dayOrder: Number(e.dayOrder) >= 1 ? Number(e.dayOrder) : undefined,
+        dayName: e.dayName,
+        dayOrder: typeof e.dayOrder === 'number' && e.dayOrder >= 1 && e.dayOrder <= 6 ? e.dayOrder : undefined,
+        workingDayCount: typeof e.workingDayCount === 'number' ? e.workingDayCount : undefined,
+        remark: e.remark,
         isHoliday: !!e.isHoliday,
-        holidayTitle: e.isHoliday ? e.holidayTitle : undefined
+        holidayTitle: e.isHoliday ? (e.holidayTitle || e.remark || 'விடுமுறை') : undefined
       }))
       .sort((a, b) => (a.date < b.date ? -1 : 1));
+
     setStaffDayOrders((prev) => {
       const existing = prev.find((o) => o.month === data.month);
       const record: Omit<StaffDayOrder, 'id'> = {
@@ -1319,14 +1550,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return [{ ...record, id: 'sdo-' + Date.now() }, ...prev];
     });
-    syncStaffDayOrderToCalendar(trimmedEntries);
+
+    await syncStaffDayOrderToCalendar(trimmedEntries);
     logAudit('SAVE_STAFF_DAY_ORDER', 'Day Order', `Saved ${trimmedEntries.length} day order entries for ${data.month}`);
     addToast('Day Order Saved', `Saved ${trimmedEntries.length} dated day order entries (${data.month})`, 'success');
   };
 
-  const updateStaffDayOrder = (data: StaffDayOrder) => {
-    setStaffDayOrders((prev) => prev.map((o) => (o.id === data.id ? { ...data, updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19) } : o)));
-    syncStaffDayOrderToCalendar(data.entries);
+  const updateStaffDayOrder = async (data: StaffDayOrder) => {
+    const trimmedEntries = data.entries
+      .map((e) => ({
+        date: e.date,
+        dayName: e.dayName,
+        dayOrder: typeof e.dayOrder === 'number' && e.dayOrder >= 1 && e.dayOrder <= 6 ? e.dayOrder : undefined,
+        workingDayCount: typeof e.workingDayCount === 'number' ? e.workingDayCount : undefined,
+        remark: e.remark,
+        isHoliday: !!e.isHoliday,
+        holidayTitle: e.isHoliday ? (e.holidayTitle || e.remark || 'விடுமுறை') : undefined
+      }))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+    const updated = { ...data, entries: trimmedEntries, updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19) };
+    setStaffDayOrders((prev) => prev.map((o) => (o.id === data.id ? updated : o)));
+    await syncStaffDayOrderToCalendar(trimmedEntries);
     addToast('Day Order Updated', `Updated staff day order for ${data.month}`, 'success');
   };
 
@@ -1434,6 +1678,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Circular and Bonafide persistence is now DB-backed (Supabase) — no localStorage needed.
 
+  const syncCircularToSupabase = async (circ: Circular) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const isUuid = (str?: string) => str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+      const validDeptId = isUuid(circ.departmentId) ? circ.departmentId : null;
+      const validAuthorId = isUuid(currentUser?.id) ? currentUser.id : (isUuid(circ.createdBy) ? circ.createdBy : null);
+
+      const targetRole: string | null =
+        circ.target === 'all_faculty' || circ.target === 'individual_faculty'
+          ? 'faculty'
+          : circ.target === 'all_students' || circ.target === 'specific_students' || circ.target === 'tutor_class'
+          ? 'student'
+          : null;
+
+      const selectedFacultyJson = Array.isArray(circ.selectedFacultyIds) && circ.selectedFacultyIds.length > 0
+        ? JSON.stringify(circ.selectedFacultyIds)
+        : null;
+
+      const row = {
+        id: circ.id,
+        title: circ.title,
+        content: circ.description || circ.title,
+        status: circ.status,
+        target: circ.target || targetRole,
+        target_role: targetRole,
+        department_id: validDeptId,
+        target_year: circ.year ? parseInt(circ.year, 10) || null : null,
+        target_semester: circ.targetClass?.semester || null,
+        target_section: circ.targetClass?.section || null,
+        target_programme: circ.programme || null,
+        target_shift: circ.shift || null,
+        attachment_url: circ.attachmentUrl || null,
+        attachment_name: circ.attachmentName || null,
+        author_id: validAuthorId,
+        signer_name: circ.signedBy || circ.createdByName || circ.createdBy || null,
+        publisher_name: circ.publishedBy || circ.createdByName || circ.createdBy || null,
+        published_at: circ.publishedAt ? new Date(circ.publishedAt).toISOString() : (circ.status === 'published' ? new Date().toISOString() : null),
+        recipient_count: circ.recipientCount || 0,
+        selected_faculty_ids: selectedFacultyJson,
+        valid_from: circ.validFrom || (circ.createdAt ? String(circ.createdAt).substring(0, 10) : new Date().toISOString().substring(0, 10)),
+        valid_until: circ.validUntil ? String(circ.validUntil).substring(0, 10) : new Date(Date.now() + 14 * 86400000).toISOString().substring(0, 10),
+        created_at: circ.createdAt ? new Date(circ.createdAt).toISOString() : new Date().toISOString()
+      };
+
+      const { error } = await supabase.from('circulars').upsert([row], { onConflict: 'id' });
+      if (error) {
+        console.warn('[Supabase] circulars upsert warning:', error.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] Exception syncing circular to Supabase:', err);
+    }
+  };
+
+  const deleteCircularFromSupabase = async (id: string) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      await supabase.from('circulars').delete().eq('id', id);
+    } catch (err) {
+      console.warn('[Supabase] Exception deleting circular:', err);
+    }
+  };
+
+  const loadCircularsFromDatabase = async () => {
+    try {
+      const apiRes = await apiClient.circulars();
+      if (Array.isArray(apiRes)) {
+        setCirculars(apiRes);
+      }
+    } catch (err) {
+      console.warn('[API] Failed to load circulars:', err);
+    }
+  };
+
   const addCircular = (circularData: Omit<Circular, 'id' | 'createdAt' | 'recipientCount'>): Circular => {
     const recipientCount =
       circularData.target === 'all_faculty'
@@ -1447,22 +1764,75 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : circularData.target === 'specific_students'
         ? studentsForCircular({ ...circularData, target: circularData.target }, students).length
         : 0;
+
+    const generateUuid = () => {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+      return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c: any) =>
+        (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+      );
+    };
+
     const newCircular: Circular = {
       ...circularData,
-      id: 'circ-' + Date.now(),
+      id: generateUuid(),
+      createdBy: circularData.createdBy || currentUser.id || currentUser.name,
       createdByRole: circularData.createdByRole || currentUser.role,
       createdByName: circularData.createdByName || currentUser.name,
       recipientCount,
       createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
     setCirculars((prev) => [newCircular, ...prev]);
+
+    // Persist to backend database API
+    const isUuid = (str?: string) => str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+    apiClient.createCircular({
+      id: newCircular.id,
+      title: newCircular.title,
+      content: newCircular.description,
+      target: newCircular.target,
+      department_id: isUuid(newCircular.departmentId) ? newCircular.departmentId : null,
+      attachment_url: newCircular.attachmentUrl,
+      attachment_name: newCircular.attachmentName,
+      selected_faculty_ids: newCircular.selectedFacultyIds,
+      valid_from: newCircular.validFrom,
+      valid_until: newCircular.validUntil,
+      status: newCircular.status || 'draft'
+    }).then((created) => {
+      if (created && created.id) {
+        setCirculars((prev) =>
+          prev.map((c) =>
+            c.id === newCircular.id
+              ? { ...c, id: created.id, status: (c.status !== 'draft' ? c.status : created.status || c.status) as CircularStatus }
+              : c
+          )
+        );
+      }
+    }).catch((err) => console.warn('[Backend API] createCircular warning:', err));
+
+    syncCircularToSupabase(newCircular);
     logAudit('CREATE_CIRCULAR', 'Circulars', `Created circular: ${newCircular.title}`);
-    addToast('Circular Created', `"${newCircular.title}" saved as draft`, 'success');
+    addToast('Circular Created', `"${newCircular.title}" saved`, 'success');
     return newCircular;
   };
 
   const updateCircular = (updated: Circular) => {
     setCirculars((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+
+    apiClient.updateCircular(updated.id, {
+      title: updated.title,
+      content: updated.description,
+      target: updated.target,
+      status: updated.status,
+      attachment_url: updated.attachmentUrl,
+      attachment_name: updated.attachmentName,
+      selected_faculty_ids: updated.selectedFacultyIds,
+      valid_from: updated.validFrom,
+      valid_until: updated.validUntil
+    }).catch((err) => console.warn('[Backend API] updateCircular warning:', err));
+
+    syncCircularToSupabase(updated);
     logAudit('UPDATE_CIRCULAR', 'Circulars', `Updated circular: ${updated.title}`);
     addToast('Circular Updated', `"${updated.title}" saved`, 'success');
   };
@@ -1470,81 +1840,174 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteCircular = (id: string) => {
     const target = circulars.find((c) => c.id === id);
     setCirculars((prev) => prev.filter((c) => c.id !== id));
+    apiClient.deleteCircular(id).catch((err) => console.warn('[Backend API] deleteCircular warning:', err));
+    deleteCircularFromSupabase(id);
     logAudit('DELETE_CIRCULAR', 'Circulars', `Deleted circular: ${target?.title || id}`);
     addToast('Circular Deleted', 'Circular removed from the system', 'info');
   };
 
-  const signCircular = (id: string, signerName: string) => {
+  const signCircular = async (id: string, signerName: string) => {
+    let signedCirc: Circular | null = null;
     setCirculars((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          return {
+          const s = {
             ...c,
             status: 'signed' as CircularStatus,
             signedBy: signerName,
             signedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
           };
+          signedCirc = s;
+          return s;
         }
         return c;
       })
     );
+
+    try {
+      const apiRes = await apiClient.signCircular(id);
+      if (apiRes && apiRes.status) {
+        setCirculars((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, status: (apiRes.status || 'signed') as CircularStatus, signedBy: signerName } : c))
+        );
+      }
+    } catch {
+      const current = signedCirc || circulars.find((c) => c.id === id);
+      if (current) {
+        await apiClient.updateCircular(id, {
+          title: current.title,
+          content: current.description,
+          target: current.target,
+          status: 'signed',
+          valid_from: current.validFrom,
+          valid_until: current.validUntil
+        }).catch(() => {});
+      }
+    }
+
+    if (signedCirc) {
+      syncCircularToSupabase(signedCirc);
+    }
     logAudit('SIGN_CIRCULAR', 'Circulars', `Circular ${id} signed by ${signerName}`);
     addToast('Circular Signed', 'Ready for publishing', 'success');
   };
 
-  const publishCircular = (id: string, publisherName: string, providedCirc?: Circular) => {
+  const publishCircular = async (id: string, publisherName: string, providedCirc?: Circular) => {
+    let publishedCirc: Circular | null = null;
     setCirculars((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          return {
+          const p = {
             ...c,
             status: 'published' as CircularStatus,
             publishedBy: publisherName,
             publishedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
           };
+          publishedCirc = p;
+          return p;
         }
         return c;
       })
     );
 
-    // `providedCirc` lets callers publish a freshly-created circular before state commits.
-    const circ = providedCirc || circulars.find((c) => c.id === id) || null;
+    const circ = providedCirc
+      ? { ...providedCirc, status: 'published' as CircularStatus, publishedBy: publisherName, publishedAt: new Date().toISOString().replace('T', ' ').substring(0, 16) }
+      : publishedCirc || circulars.find((c) => c.id === id) || null;
+
+    try {
+      const apiRes = await apiClient.publishCircular(id);
+      if (apiRes && apiRes.status) {
+        setCirculars((prev) =>
+          prev.map((c) =>
+            c.id === id
+              ? {
+                  ...c,
+                  status: (apiRes.status || 'published') as CircularStatus,
+                  publishedBy: publisherName,
+                  publishedAt: apiRes.publishedAt || apiRes.published_at || new Date().toISOString().replace('T', ' ').substring(0, 16)
+                }
+              : c
+          )
+        );
+      }
+    } catch {
+      if (circ) {
+        await apiClient.updateCircular(id, {
+          title: circ.title,
+          content: circ.description,
+          target: circ.target,
+          status: 'published',
+          valid_from: circ.validFrom,
+          valid_until: circ.validUntil
+        }).catch(() => {});
+      }
+    }
+
     if (circ) {
-      // Faculty-created circulars are ONLY visible to students and their notifications
-      // are ONLY delivered to students.
-      const isFacultyAuthor = circ.createdByRole === 'faculty';
+      syncCircularToSupabase(circ);
 
-      const targetRole: UserRole | undefined =
-        circ.target === 'all_faculty' || circ.target === 'individual_faculty'
-          ? (isFacultyAuthor ? undefined : 'faculty')
-          : circ.target === 'all_students' || circ.target === 'specific_students' || circ.target === 'tutor_class'
-          ? 'student'
-          : undefined;
-
-      const targetStudents = studentsForCircular(circ, students);
-      const targetSemesters = Array.from(new Set(targetStudents.map((s) => s.semester)));
-      const targetDepartmentIds = Array.from(new Set(targetStudents.map((s) => s.departmentId)));
-
-      const newNotification: AppNotification = {
-        id: 'notif-circ-' + Date.now(),
-        title: `Circular: ${circ.title}`,
-        message: `${circ.description.substring(0, 120)}${circ.description.length > 120 ? '...' : ''}`,
-        timestamp: 'Just now',
-        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-        read: false,
-        type: 'info',
-        targetRole,
-        link:
+      if (circ.target === 'individual_faculty' && Array.isArray(circ.selectedFacultyIds) && circ.selectedFacultyIds.length > 0) {
+        const newNotifs: AppNotification[] = circ.selectedFacultyIds.map((facId) => ({
+          id: 'notif-circ-' + Date.now() + '-' + facId,
+          title: `Circular: ${circ.title}`,
+          message: `${circ.description.substring(0, 120)}${circ.description.length > 120 ? '...' : ''}`,
+          timestamp: 'Just now',
+          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          read: false,
+          type: 'info',
+          targetRole: 'faculty',
+          link: 'hod_circulars',
+          circularId: circ.id,
+          userId: facId
+        }));
+        setNotifications((prev) => [...newNotifs, ...prev]);
+      } else if (circ.target === 'all_faculty') {
+        const newNotification: AppNotification = {
+          id: 'notif-circ-' + Date.now(),
+          title: `Circular: ${circ.title}`,
+          message: `${circ.description.substring(0, 120)}${circ.description.length > 120 ? '...' : ''}`,
+          timestamp: 'Just now',
+          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          read: false,
+          type: 'info',
+          targetRole: 'faculty',
+          link: 'hod_circulars',
+          circularId: circ.id
+        };
+        setNotifications((prev) => [newNotification, ...prev]);
+      } else {
+        const isFacultyAuthor = circ.createdByRole === 'faculty';
+        const targetRole: UserRole | undefined =
           circ.target === 'all_faculty' || circ.target === 'individual_faculty'
-            ? 'hod_circulars'
-            : 'student_circulars',
-        circularId: circ.id,
-        targetDepartmentIds: targetRole === 'student' ? targetDepartmentIds : undefined,
-        targetSemesters: targetRole === 'student' && targetSemesters.length > 0 ? targetSemesters : undefined,
-        targetClass: circ.target === 'tutor_class' ? circ.targetClass : undefined
-      };
+            ? (isFacultyAuthor ? undefined : 'faculty')
+            : circ.target === 'all_students' || circ.target === 'specific_students' || circ.target === 'tutor_class'
+            ? 'student'
+            : undefined;
 
-      setNotifications((prev) => [newNotification, ...prev]);
+        const targetStudents = studentsForCircular(circ, students);
+        const targetSemesters = Array.from(new Set(targetStudents.map((s) => s.semester)));
+        const targetDepartmentIds = Array.from(new Set(targetStudents.map((s) => s.departmentId)));
+
+        const newNotification: AppNotification = {
+          id: 'notif-circ-' + Date.now(),
+          title: `Circular: ${circ.title}`,
+          message: `${circ.description.substring(0, 120)}${circ.description.length > 120 ? '...' : ''}`,
+          timestamp: 'Just now',
+          createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          read: false,
+          type: 'info',
+          targetRole,
+          link:
+            circ.target === 'all_faculty' || circ.target === 'individual_faculty'
+              ? 'hod_circulars'
+              : 'student_circulars',
+          circularId: circ.id,
+          targetDepartmentIds: targetRole === 'student' ? targetDepartmentIds : undefined,
+          targetSemesters: targetRole === 'student' && targetSemesters.length > 0 ? targetSemesters : undefined,
+          targetClass: circ.target === 'tutor_class' ? circ.targetClass : undefined
+        };
+        setNotifications((prev) => [newNotification, ...prev]);
+      }
     }
 
     logAudit('PUBLISH_CIRCULAR', 'Circulars', `Circular ${id} published by ${publisherName}`);
@@ -1552,14 +2015,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const archiveCircular = (id: string) => {
+    let archivedCirc: Circular | null = null;
     setCirculars((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          return { ...c, status: 'archived' as CircularStatus };
+          const a = { ...c, status: 'archived' as CircularStatus };
+          archivedCirc = a;
+          return a;
         }
         return c;
       })
     );
+    if (archivedCirc) {
+      syncCircularToSupabase(archivedCirc);
+    }
     addToast('Circular Archived', 'Circular has been archived', 'info');
   };
 
@@ -1907,7 +2376,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitBonafideRequest,
         reviewBonafideRequest,
         deleteBonafideRequest,
-        canDeleteBonafideRequest
+        canDeleteBonafideRequest,
+
+        selectedCalendarMonth,
+        setSelectedCalendarMonth,
+
+        language,
+        setLanguage,
+        t
       }}
     >
       {children}

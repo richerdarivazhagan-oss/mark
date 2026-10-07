@@ -6,7 +6,7 @@ import { BackButton } from './BackButton';
 import { Bell, CheckCircle2, Clock, FileText } from 'lucide-react';
 
 export const NotificationCenter: React.FC = () => {
-  const { notifications, markNotificationRead, currentUser, setActiveScreen } = useApp();
+  const { notifications, markNotificationRead, currentUser, setActiveScreen, t } = useApp();
 
   const filteredNotifications = useMemo(() => {
     return notifications.filter((n) => notificationVisibleToUser(n, currentUser));
@@ -22,7 +22,7 @@ export const NotificationCenter: React.FC = () => {
       <BackButton />
       <div className="pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
         <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight">
-          Notification Center & System Alerts
+          {t('notifications.centerTitle', 'Notification Center & System Alerts')}
         </h2>
       </div>
 
@@ -30,8 +30,8 @@ export const NotificationCenter: React.FC = () => {
         {filteredNotifications.length === 0 ? (
           <div className="p-8 bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0]/80 dark:border-zinc-800 rounded-2xl text-center">
             <Bell className="w-10 h-10 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
-            <p className="text-sm font-bold text-[#000000] dark:text-[#64748B] dark:text-zinc-400">No notifications yet.</p>
-            <p className="text-xs text-[#000000] dark:text-[#64748B] dark:text-zinc-500 mt-1">You will receive alerts here when relevant.</p>
+            <p className="text-sm font-bold text-[#000000] dark:text-[#64748B] dark:text-zinc-400">{t('notifications.noNotificationsYet', 'No notifications yet.')}</p>
+            <p className="text-xs text-[#000000] dark:text-[#64748B] dark:text-zinc-500 mt-1">{t('notifications.willReceiveAlerts', 'You will receive alerts here when relevant.')}</p>
           </div>
         ) : (
           filteredNotifications.map((n) => (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { CalendarEvent } from '../../types';
 import { Modal } from '../common/Modal';
@@ -6,25 +6,68 @@ import { BackButton } from '../common/BackButton';
 import { Plus, Trash2, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 
 export const AcademicCalendar: React.FC = () => {
-  const { calendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } = useApp();
+  const {
+    calendarEvents,
+    addCalendarEvent,
+    updateCalendarEvent,
+    deleteCalendarEvent,
+    selectedCalendarMonth,
+    setSelectedCalendarMonth,
+    language,
+    t
+  } = useApp();
 
-  // Month navigation state
-  const [viewMonth, setViewMonth] = useState<number>(7); // 0-indexed month (7 = August)
-  const [viewYear, setViewYear] = useState<number>(2026);
+  // Month navigation state - Initialize from selectedCalendarMonth or default 2026-09
+  const [viewMonth, setViewMonth] = useState<number>(() => {
+    if (selectedCalendarMonth) {
+      const parts = selectedCalendarMonth.split('-');
+      if (parts.length === 2) {
+        const m = parseInt(parts[1], 10) - 1;
+        if (m >= 0 && m <= 11) return m;
+      }
+    }
+    return 8; // September (0-indexed 8)
+  });
+  const [viewYear, setViewYear] = useState<number>(() => {
+    if (selectedCalendarMonth) {
+      const parts = selectedCalendarMonth.split('-');
+      if (parts.length === 2) {
+        const y = parseInt(parts[0], 10);
+        if (y >= 2020 && y <= 2035) return y;
+      }
+    }
+    return 2026;
+  });
+
+  useEffect(() => {
+    const ym = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    if (ym !== selectedCalendarMonth) {
+      setSelectedCalendarMonth(ym);
+    }
+  }, [viewMonth, viewYear, selectedCalendarMonth, setSelectedCalendarMonth]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Omit<CalendarEvent, 'id'>>({
-    date: '2026-08-15',
+    date: '2026-09-01',
     type: 'holiday',
     title: '',
     description: ''
   });
 
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
+  const monthNames = language === 'ta'
+    ? [
+        'ஜனவரி', 'பிப்ரவரி', 'மார்ச்', 'ஏப்ரல்', 'மே', 'ஜூன்',
+        'ஜூலை', 'ஆகஸ்ட்', 'செப்டம்பர்', 'அக்டோபர்', 'நவம்பர்', 'டிசம்பர்'
+      ]
+    : [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+  const weekdays = language === 'ta'
+    ? ['ஞாயிறு', 'திங்கள்', 'செவ்வாய்', 'புதன்', 'வியாழன்', 'வெள்ளி', 'சனி']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   // Build date string YYYY-MM-DD for a given day of the viewed month
   const dateStrFor = (day: number) =>
@@ -33,7 +76,11 @@ export const AcademicCalendar: React.FC = () => {
   const daysInMonth = Array.from({ length: new Date(viewYear, viewMonth + 1, 0).getDate() }, (_, i) => {
     const day = i + 1;
     const dateStr = dateStrFor(day);
-    const events = calendarEvents.filter((e) => e.date === dateStr);
+    const events = calendarEvents.filter((e) => {
+      if (!e.date) return false;
+      const norm = e.date.trim().substring(0, 10);
+      return norm === dateStr;
+    });
     return { day, dateStr, events };
   });
 
@@ -100,7 +147,7 @@ export const AcademicCalendar: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
         <div>
           <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight">
-            Academic Calendar & Holiday Planner
+            {t('calendar.title', 'Academic Calendar & Holiday Planner')}
           </h2>
 
         </div>
@@ -111,7 +158,7 @@ export const AcademicCalendar: React.FC = () => {
             className="flex items-center gap-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-[#FFFFFF] dark:bg-[#2563EB] dark:text-[#FFFFFF] dark:hover:bg-white text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Add
+            {t('common.add', 'Add')}
           </button>
         </div>
       </div>
@@ -119,19 +166,19 @@ export const AcademicCalendar: React.FC = () => {
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 p-3 bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0] dark:border-[#232326] rounded-xl text-xs font-semibold">
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-rose-500" /> Holiday / Non-working
+          <span className="w-3 h-3 rounded-full bg-rose-500" /> {t('calendar.holidayNonWorking', 'Holiday / Non-working')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-amber-500" /> Examination Period
+          <span className="w-3 h-3 rounded-full bg-amber-500" /> {t('calendar.examPeriod', 'Examination Period')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-emerald-500" /> Working Day
+          <span className="w-3 h-3 rounded-full bg-emerald-500" /> {t('calendar.workingDay', 'Working Day')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-[#2563EB] dark:bg-[#2563EB]" /> Institutional Event
+          <span className="w-3 h-3 rounded-full bg-[#2563EB] dark:bg-[#2563EB]" /> {t('calendar.institutionalEvent', 'Institutional Event')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-indigo-500" /> Day Order (from Staff Schedule)
+          <span className="w-3 h-3 rounded-full bg-indigo-500" /> {t('calendar.dayOrderStaff', 'Day Order (from Staff Schedule)')}
         </span>
       </div>
 
@@ -160,7 +207,7 @@ export const AcademicCalendar: React.FC = () => {
 
         <div className="overflow-x-auto no-scrollbar">
           <div className="grid grid-cols-7 gap-2 min-w-[560px]">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+            {weekdays.map((d) => (
               <div key={d} className="text-center text-[10px] font-bold uppercase text-[#000000] dark:text-[#64748B] p-2">
                 {d}
               </div>
@@ -178,6 +225,11 @@ export const AcademicCalendar: React.FC = () => {
               <span className="text-xs font-bold text-[#1E293B] dark:text-zinc-300">{day}</span>
               <div className="space-y-1">
                 {events.map((e) => {
+                  const romanMatch = e.title.match(/Day Order\s+(I|II|III|IV|V|VI|\d)/i);
+                  const dayOrderVal = e.dayOrder != null
+                    ? (['', 'I', 'II', 'III', 'IV', 'V', 'VI'][e.dayOrder] || e.dayOrder)
+                    : (romanMatch ? romanMatch[1] : null);
+
                   let badgeColor = 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300';
                   if (e.type === 'exam') badgeColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950/80 dark:text-amber-300';
                   if (e.type === 'working') badgeColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300';
@@ -187,12 +239,14 @@ export const AcademicCalendar: React.FC = () => {
                     <div
                       key={e.id}
                       className={`p-1 rounded text-[9px] font-bold flex items-center justify-between ${badgeColor}`}
-                      title={`${e.title}${e.description ? ` — ${e.description}` : ''}${e.dayOrder ? ` (Day Order ${e.dayOrder})` : ''}`}
+                      title={`${e.title}${e.description ? ` — ${e.description}` : ''}${dayOrderVal ? ` (Day Order ${dayOrderVal})` : ''}`}
                     >
                       <span className="truncate">
-                        {e.type === 'working' && e.dayOrder != null ? (
+                        {dayOrderVal != null ? (
                           <span className="flex items-center gap-1">
-                            <span className="px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-extrabold text-[10px]">DO{e.dayOrder}</span>
+                            <span className="px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-extrabold text-[10px]">
+                              {language === 'ta' ? `நாள் வரிசை ${dayOrderVal}` : `DO ${dayOrderVal}`}
+                            </span>
                             <span className="truncate">{e.title}</span>
                           </span>
                         ) : (
@@ -203,14 +257,14 @@ export const AcademicCalendar: React.FC = () => {
                         <button
                           onClick={() => openEditModal(e)}
                           className="opacity-60 hover:opacity-100 ml-1"
-                          title="Edit event"
+                          title={t('common.edit', 'Edit event')}
                         >
                           <Pencil className="w-2.5 h-2.5" />
                         </button>
                         <button
                           onClick={() => deleteCalendarEvent(e.id)}
                           className="opacity-60 hover:opacity-100 ml-1"
-                          title="Delete event"
+                          title={t('common.delete', 'Delete event')}
                         >
                           <Trash2 className="w-2.5 h-2.5" />
                         </button>
@@ -229,12 +283,12 @@ export const AcademicCalendar: React.FC = () => {
       <Modal
         isOpen={modalOpen}
         onClose={() => { setModalOpen(false); setEditingEventId(null); }}
-        title={editingEventId ? 'Edit Academic Calendar Event' : 'Tag Academic Calendar Date'}
-        subtitle={editingEventId ? 'Update the existing calendar event details' : 'Mark holidays, exams, or custom working days'}
+        title={editingEventId ? t('calendar.editTitle', 'Edit Academic Calendar Event') : t('calendar.addTitle', 'Tag Academic Calendar Date')}
+        subtitle={editingEventId ? t('calendar.editSubtitle', 'Update the existing calendar event details') : t('calendar.addSubtitle', 'Mark holidays, exams, or custom working days')}
       >
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">Date</label>
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">{t('calendar.date', 'Date')}</label>
             <input
               type="date"
               required
@@ -245,25 +299,25 @@ export const AcademicCalendar: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">Tag Classification</label>
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">{t('calendar.tagClassification', 'Tag Classification')}</label>
             <select
               value={formData.type}
               onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
               className="w-full p-2 text-xs bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl"
             >
-              <option value="holiday">National / Festival Holiday</option>
-              <option value="exam">Examination Period</option>
-              <option value="working">Special Working Day</option>
-              <option value="event">Campus Event / Symposium</option>
+              <option value="holiday">{t('calendar.holidayOption', 'National / Festival Holiday')}</option>
+              <option value="exam">{t('calendar.examOption', 'Examination Period')}</option>
+              <option value="working">{t('calendar.workingOption', 'Special Working Day')}</option>
+              <option value="event">{t('calendar.eventOption', 'Campus Event / Symposium')}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">Title</label>
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">{t('calendar.eventTitle', 'Title')}</label>
             <input
               type="text"
               required
-              placeholder="Independence Day / Midterm Exams"
+              placeholder={language === 'ta' ? 'சுதந்திர தினம் / பருவத் தேர்வுகள்' : 'Independence Day / Midterm Exams'}
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full p-2 text-xs bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl"
@@ -271,12 +325,12 @@ export const AcademicCalendar: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">Description (Optional)</label>
+            <label className="block text-xs font-semibold text-[#1E293B] dark:text-zinc-300 mb-1">{t('calendar.eventDescription', 'Description (Optional)')}</label>
             <textarea
               rows={2}
               value={formData.description || ''}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Short note about this date"
+              placeholder={t('calendar.descPlaceholder', 'Short note about this date')}
               className="w-full p-2 text-xs bg-[#F7F9FC] dark:bg-zinc-800 border border-[#E2E8F0] dark:border-zinc-700 rounded-xl"
             />
           </div>
@@ -285,7 +339,7 @@ export const AcademicCalendar: React.FC = () => {
             type="submit"
             className="w-full py-2.5 bg-[#2563EB] hover:bg-[#FFFFFF] dark:bg-[#2563EB] dark:text-[#FFFFFF] dark:hover:bg-white text-white text-xs font-bold rounded-xl transition-colors"
           >
-            {editingEventId ? 'Save Changes' : 'Save Calendar Event'}
+            {editingEventId ? t('common.saveChanges', 'Save Changes') : t('calendar.saveEvent', 'Save Calendar Event')}
           </button>
         </form>
       </Modal>

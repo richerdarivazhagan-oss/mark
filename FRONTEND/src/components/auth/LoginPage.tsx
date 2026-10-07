@@ -6,16 +6,16 @@ import { SignupPage } from './SignupPage';
 import './login.css';
 
 const ROLES: Record<UserRole, { label: string; placeholder: string; autocomplete: string; pattern: RegExp; error: string }> = {
-  admin: { label: 'Username :', placeholder: 'Enter your username', autocomplete: 'username', pattern: /^[a-zA-Z0-9._-]{3,32}$/, error: 'Enter a valid username (3-32 characters).' },
-  hod: { label: 'Employee ID :', placeholder: 'Enter your employee ID', autocomplete: 'username', pattern: /^[a-zA-Z0-9-]{3,20}$/, error: 'Enter a valid employee ID.' },
-  faculty: { label: 'Employee ID :', placeholder: 'Enter your employee ID', autocomplete: 'username', pattern: /^[a-zA-Z0-9-]{3,20}$/, error: 'Enter a valid employee ID.' },
-  student: { label: 'Register Number :', placeholder: 'Enter your register number', autocomplete: 'username', pattern: /^[a-zA-Z0-9]{5,20}$/, error: 'Enter a valid register number.' },
+  admin: { label: 'Username / Email :', placeholder: 'Enter username or email', autocomplete: 'username', pattern: /^[a-zA-Z0-9._@+-]{3,60}$/, error: 'Enter a valid username or email (3-60 characters).' },
+  hod: { label: 'Employee ID / Email :', placeholder: 'Enter employee ID or email', autocomplete: 'username', pattern: /^[a-zA-Z0-9._@+-]{3,60}$/, error: 'Enter a valid employee ID or email.' },
+  faculty: { label: 'Employee ID / Email :', placeholder: 'Enter employee ID or email', autocomplete: 'username', pattern: /^[a-zA-Z0-9._@+-]{3,60}$/, error: 'Enter a valid employee ID or email.' },
+  student: { label: 'Register No / Email :', placeholder: 'Enter register number or email', autocomplete: 'username', pattern: /^[a-zA-Z0-9._@+-]{3,60}$/, error: 'Enter a valid register number or email.' },
 };
 
 const REMEMBER_KEY = 'college-login-remember';
 
 export const LoginPage: React.FC = () => {
-  const { login } = useApp();
+  const { login, language, setLanguage, t } = useApp();
   const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +23,9 @@ export const LoginPage: React.FC = () => {
   const [remember, setRemember] = useState(false);
   const [identifierError, setIdentifierError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [isSignup, setIsSignup] = useState(false);
 
@@ -40,20 +42,30 @@ export const LoginPage: React.FC = () => {
     }
   }, []);
 
+  const handleRoleChange = (role: UserRole) => {
+    setSelectedRole(role);
+    setIdentifierError('');
+    setPasswordError('');
+    setErrorMessage('');
+    setStatus('');
+  };
+
   if (isSignup) {
     return <SignupPage onNavigateToLogin={() => setIsSignup(false)} />;
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const role = ROLES[selectedRole];
     let ok = true;
 
     setIdentifierError('');
     setPasswordError('');
+    setErrorMessage('');
     setStatus('');
 
-    if (!role.pattern.test(identifier)) {
+    const cleanId = identifier.trim();
+    if (!role.pattern.test(cleanId)) {
       setIdentifierError(role.error);
       ok = false;
     }
@@ -65,7 +77,7 @@ export const LoginPage: React.FC = () => {
 
     try {
       if (remember) {
-        localStorage.setItem(REMEMBER_KEY, JSON.stringify({ role: selectedRole, id: identifier }));
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify({ role: selectedRole, id: cleanId }));
       } else {
         localStorage.removeItem(REMEMBER_KEY);
       }
@@ -73,37 +85,84 @@ export const LoginPage: React.FC = () => {
       /* storage unavailable */
     }
 
-    login(identifier, password);
+    try {
+      setLoading(true);
+      setStatus('Logging in...');
+      await login(cleanId, password, selectedRole);
+    } catch (err: any) {
+      const msg = err?.message || 'Invalid role or credentials.';
+      setErrorMessage(msg);
+      setStatus('');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const role = ROLES[selectedRole];
 
   return (
     <div className="login-page">
+      <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 50 }}>
+        <div
+          id="login-language-switcher"
+          className="flex items-center bg-white/90 dark:bg-zinc-800/90 backdrop-blur p-0.5 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-bold shadow-sm select-none"
+        >
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              language === 'en'
+                ? 'bg-[#2563EB] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="English"
+          >
+            ABC
+          </button>
+          <span className="px-0.5 text-gray-300 font-light pointer-events-none">|</span>
+          <button
+            type="button"
+            onClick={() => setLanguage('ta')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              language === 'ta'
+                ? 'bg-[#2563EB] text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+            title="தமிழ் (Tamil)"
+          >
+            அ
+          </button>
+        </div>
+      </div>
+
       <section className="card" aria-labelledby="login-title">
         <header className="card__head">
           <img className="logo" src="/assets/tn-emblem.png" alt="Tamil Nadu Government emblem" />
-          <p className="college-name">Government Arts &amp; Science College</p>
-          <p className="college-sub">Affiliated to the University · Estd. 1965</p>
-          <h1 className="card__title" id="login-title">Login to your account</h1>
+          <p className="college-name">{language === 'ta' ? 'அரசு கலை & அறிவியல் கல்லூரி' : 'Government Arts & Science College'}</p>
+          <p className="college-sub">{language === 'ta' ? 'பல்கலைக்கழகத்துடன் இணைக்கப்பட்டது · நிறுவப்பட்டது 1965' : 'Affiliated to the University · Estd. 1965'}</p>
+          <h1 className="card__title" id="login-title">
+            {language === 'ta' ? 'உங்கள் கணக்கில் உள்நுழைக' : 'Login to your account'}
+          </h1>
         </header>
 
         <form className="form" onSubmit={handleLogin} noValidate>
           {/* Login As */}
           <div className="field">
-            <label className="label" htmlFor="loginAs">Login As :</label>
+            <label className="label" htmlFor="loginAs">
+              {language === 'ta' ? 'உள்நுழையும் பங்கு :' : 'Login As :'}
+            </label>
             <div className="select-wrap">
               <select
                 className="control select"
                 id="loginAs"
                 value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
+                onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                 required
               >
-                <option value="admin">Admin</option>
-                <option value="hod">HOD</option>
-                <option value="faculty">Faculty</option>
-                <option value="student">Student</option>
+                <option value="admin">{language === 'ta' ? 'நிர்வாகி (Admin)' : 'Admin'}</option>
+                <option value="faculty">{language === 'ta' ? 'பணியாளர் (Faculty)' : 'Faculty'}</option>
+                <option value="hod">{language === 'ta' ? 'துறைத்தலைவர் (HOD)' : 'HOD'}</option>
+                <option value="student">{language === 'ta' ? 'மாணவர் (Student)' : 'Student'}</option>
               </select>
               <svg className="icon icon--chevron" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,7 +180,10 @@ export const LoginPage: React.FC = () => {
               placeholder={role.placeholder}
               autoComplete={role.autocomplete}
               value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              onChange={(e) => {
+                setIdentifier(e.target.value);
+                setErrorMessage('');
+              }}
               required
             />
             {identifierError && <p className="error" role="alert">{identifierError}</p>}
@@ -129,16 +191,21 @@ export const LoginPage: React.FC = () => {
 
           {/* Password */}
           <div className="field">
-            <label className="label" htmlFor="password">Password :</label>
+            <label className="label" htmlFor="password">
+              {language === 'ta' ? 'கடவுச்சொல் :' : 'Password :'}
+            </label>
             <div className="input-wrap">
               <input
                 className="control"
                 type={showPassword ? 'text' : 'password'}
                 id="password"
-                placeholder="Enter your password"
+                placeholder={language === 'ta' ? 'உங்கள் கடவுச்சொல்லை உள்ளிடவும்' : 'Enter your password'}
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrorMessage('');
+                }}
                 required
               />
               <button
@@ -163,15 +230,26 @@ export const LoginPage: React.FC = () => {
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
               />
-              <span>Remember Me</span>
+              <span>{language === 'ta' ? 'என்னை நினைவில் கொள்' : 'Remember Me'}</span>
             </label>
             <button type="button" className="link" onClick={() => setForgotOpen(true)}>
-              Forgot Password?
+              {language === 'ta' ? 'கடவுச்சொல் மறந்துவிட்டதா?' : 'Forgot Password?'}
             </button>
           </div>
 
-          <button className="btn" type="submit">Login</button>
-          {status && <p className="status" role="status">{status}</p>}
+          <button className="btn" type="submit" disabled={loading}>
+            {loading ? (language === 'ta' ? 'உள்நுழைகிறது...' : 'Logging in...') : (language === 'ta' ? 'உள்நுழை' : 'Login')}
+          </button>
+          {errorMessage && (
+            <p className="error" role="alert" style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+              {errorMessage}
+            </p>
+          )}
+          {status && !errorMessage && (
+            <p className="status" role="status" style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+              {status}
+            </p>
+          )}
         </form>
 
         <footer className="card__foot">

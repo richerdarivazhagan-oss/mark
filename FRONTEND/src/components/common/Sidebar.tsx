@@ -28,12 +28,12 @@ import {
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
-  const { currentUser, activeScreen, setActiveScreen, leaveRequests, correctionRequests, substitutionRequests, facultyList, logout } = useApp();
+  const { currentUser, activeScreen, setActiveScreen, leaveRequests, correctionRequests, substitutionRequests, facultyList, logout, t } = useApp();
 
   const role = currentUser.role;
 
   const myFaculty = facultyList.find((f) => f.id === currentUser.id);
-  const isTutor = !!myFaculty?.tutorFor;
+  const isTutor = !!myFaculty?.tutorFor || !!(currentUser as any).is_class_adviser || !!(currentUser as any).isClassAdviser;
 
   // Pending counts for badges
   const pendingLeaves = leaveRequests.filter((l) =>
@@ -76,8 +76,8 @@ export const Sidebar: React.FC = () => {
             ...(isTutor ? [
               { id: 'tutor_class_students', label: 'Tutor Class Students', icon: Eye },
               { id: 'tutor_od_requests', label: 'OD Approvals', icon: Award },
-              { id: 'tutor_circular', label: 'Tutor Circular', icon: Send }
-            ] : [])
+            ] : []),
+            { id: 'tutor_circular', label: 'Circular', icon: Send }
           ]},
           { group: 'Approvals & Tracking', items: [
             { id: 'mark_attendance', label: 'Mark Attendance', icon: CheckSquare },
@@ -129,6 +129,22 @@ export const Sidebar: React.FC = () => {
     }
   };
 
+  // Map group English label → nav group translation key
+  const groupLabelKey = (groupLabel: string): string => {
+    const groupKeyMap: Record<string, string> = {
+      'Core': 'group.core',
+      'Academic Engine': 'group.academicEngine',
+      'Governance & Systems': 'group.governance',
+      'Approvals & Tracking': 'group.approvals',
+      'My Portal': 'group.myPortal',
+      'Department Overview': 'group.deptOverview',
+      'Department Approvals': 'group.deptApprovals',
+      'Analytics & Compliance': 'group.analytics',
+    };
+    const key = groupKeyMap[groupLabel];
+    return key ? t(`nav.${key}`, groupLabel) : groupLabel;
+  };
+
   const navGroups = getNavItems();
 
   return (
@@ -138,13 +154,60 @@ export const Sidebar: React.FC = () => {
           <div key={idx}>
             {group.group && (
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#000000] dark:text-[#64748B] dark:text-zinc-500 px-3 mb-2">
-                {group.group}
+                {groupLabelKey(group.group)}
               </p>
             )}
             <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeScreen === item.id;
+                // Look up nav key first (e.g. nav.dashboard), fallback to direct dict, fallback to raw label
+                const navKeyMap: Record<string, string> = {
+                  'Dashboard': 'nav.dashboard',
+                  'Faculty Dashboard': 'nav.dashboard',
+                  'Students Directory': 'nav.students',
+                  'Faculty Directory': 'nav.faculty',
+                  'Departments': 'nav.departments',
+                  'Subjects & Curriculum': 'nav.subjects',
+                  'Timetable Builder': 'nav.timetableBuilder',
+                  'Academic Calendar': 'nav.academicCalendar',
+                  'Day Order OCR': 'nav.dayOrderOcr',
+                  'User Accounts': 'nav.userAccounts',
+                  'Reports Hub': 'nav.reportsHub',
+                  'Database Backup': 'nav.dbBackup',
+                  'Audit Logs': 'nav.auditLogs',
+                  'My Classes': 'nav.myClasses',
+                  "Today's Timetable": 'nav.todayTimetable',
+                  'Tutor Class Students': 'nav.tutorStudents',
+                  'OD Approvals': 'nav.odApprovals',
+                  'Class Circulars': 'nav.classCirculars',
+                  'Mark Attendance': 'nav.markAttendance',
+                  'Attendance History': 'nav.attendanceHistory',
+                  'Report Hub': 'nav.reportHub',
+                  'Leave Requests': 'nav.leaveQueue',
+                  'Substitution Queue': 'nav.substitutionQueue',
+                  'Bonafide Certificates': 'nav.bonafide',
+                  'Student Search': 'nav.studentSearch',
+                  'Student Dashboard': 'nav.studentDashboard',
+                  'My Attendance & Heatmap': 'nav.myAttendance',
+                  'Apply Leave': 'nav.applyLeave',
+                  'Apply OD': 'nav.applyOD',
+                  'Timetable': 'nav.timetable',
+                  'Circular': 'nav.circular',
+                  'Circulars': 'nav.circulars',
+                  'Bonafide Certificate': 'nav.bonafideCert',
+                  'HOD Dashboard': 'nav.hodDashboard',
+                  'Student Details': 'nav.studentDetails',
+                  'All Classes View': 'nav.allClasses',
+                  'Approve Leaves': 'nav.approveLeaves',
+                  'Approve OD': 'nav.approveOD',
+                  'Approve Substitutions': 'nav.approveSubs',
+                  'Approve Corrections': 'nav.approveCorrections',
+                  'Faculty Monitoring': 'nav.facultyMonitoring',
+                  'Reports Hub (Flagged)': 'nav.reportsHubFlagged',
+                };
+                const labelKey = navKeyMap[item.label];
+                const translatedLabel = labelKey ? t(labelKey, item.label) : t(item.label);
                 return (
                   <button
                     key={item.id}
@@ -157,7 +220,7 @@ export const Sidebar: React.FC = () => {
                   >
                     <div className="flex items-center gap-3">
                       <Icon className={`w-4 h-4 ${isActive ? 'text-[#2563EB] dark:text-[#FFFFFF]' : 'text-[#000000] dark:text-[#64748B]'}`} />
-                      <span>{item.label}</span>
+                      <span>{translatedLabel}</span>
                     </div>
 
                     {item.badgeCount !== undefined && item.badgeCount > 0 && (
@@ -182,7 +245,7 @@ export const Sidebar: React.FC = () => {
           className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:text-rose-300 dark:hover:bg-rose-500/10`}
         >
           <LogOut className="w-4 h-4" />
-          <span>Logout</span>
+          <span>{t('common.logout', 'Logout')}</span>
         </button>
         <button
           onClick={() => setActiveScreen('notifications')}
@@ -193,7 +256,7 @@ export const Sidebar: React.FC = () => {
           }`}
         >
           <Bell className="w-4 h-4" />
-          <span>Notifications</span>
+          <span>{t('notifications.title', 'Notifications')}</span>
         </button>
       </div>
     </aside>

@@ -95,14 +95,23 @@ export const HODCirculars: React.FC = () => {
 
   const filteredCirculars = useMemo(() => {
     const scoped = circulars.filter((c) => {
-      if (c.createdByRole === 'faculty') return false;
+      const isAuthor =
+        c.createdBy === currentUser.id ||
+        c.createdBy === currentUser.name ||
+        c.createdByName === currentUser.name ||
+        (c as any).author_id === currentUser.id ||
+        (c as any).author_name === currentUser.name ||
+        currentUser.role === 'hod';
+
+      if (!isAuthor && c.createdByRole === 'faculty') return false;
+
       const matchStatus = filterStatus === 'all' || c.status === filterStatus;
       return matchStatus;
     });
     return searchQuery.trim()
       ? rankedSearch(scoped, searchQuery, [(c) => c.title, (c) => c.description])
       : scoped;
-  }, [circulars, filterStatus, searchQuery]);
+  }, [circulars, filterStatus, searchQuery, currentUser]);
 
   const resetForm = () => {
     setForm({
@@ -170,13 +179,32 @@ export const HODCirculars: React.FC = () => {
     setShowPreview(true);
   };
 
-  const handleSign = (circular: Circular) => {
-    signCircular(circular.id, currentUser.name);
-    setShowPreview(false);
+  const handleSign = async (circular: Circular) => {
+    await signCircular(circular.id, currentUser.name);
+    setSelectedCircular((prev) =>
+      prev && prev.id === circular.id
+        ? {
+            ...prev,
+            status: 'signed' as CircularStatus,
+            signedBy: currentUser.name,
+            signedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+          }
+        : null
+    );
   };
 
-  const handlePublish = (circular: Circular) => {
-    publishCircular(circular.id, currentUser.name, circular);
+  const handlePublish = async (circular: Circular) => {
+    await publishCircular(circular.id, currentUser.name, circular);
+    setSelectedCircular((prev) =>
+      prev && prev.id === circular.id
+        ? {
+            ...prev,
+            status: 'published' as CircularStatus,
+            publishedBy: currentUser.name,
+            publishedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+          }
+        : null
+    );
     setShowPreview(false);
   };
 

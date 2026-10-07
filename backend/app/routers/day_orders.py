@@ -40,6 +40,7 @@ def _fmt(d: StaffDayOrder) -> DayOrderRead:
 
 
 @router.get("", response_model=list[DayOrderRead])
+@router.get("/", response_model=list[DayOrderRead])
 async def list_day_orders(
     current_user: User = Depends(require_role("admin", "hod", "faculty", "student")),
     db: AsyncSession = Depends(get_db),

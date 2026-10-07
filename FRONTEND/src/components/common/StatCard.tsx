@@ -13,6 +13,8 @@ interface StatCardProps {
   onClick?: () => void;
 }
 
+import { useLanguage } from '../../context/LanguageContext';
+
 export const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
@@ -23,6 +25,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   color = 'purple',
   onClick
 }) => {
+  const { t } = useLanguage();
   const unifiedTheme = {
     cardBg: 'bg-white dark:bg-[#0A0A0A]',
     border: 'border-[#E2E8F0] dark:border-[#232326]',
@@ -43,7 +46,7 @@ export const StatCard: React.FC<StatCardProps> = ({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold text-[#000000] dark:text-[#64748B] dark:text-zinc-400 uppercase tracking-wider">{title}</p>
+          <p className="text-[11px] font-bold text-[#000000] dark:text-[#64748B] dark:text-zinc-400 uppercase tracking-wider">{t(title)}</p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight transition-colors">
               {value}
@@ -52,11 +55,11 @@ export const StatCard: React.FC<StatCardProps> = ({
               <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#2563EB]/15 dark:bg-[#2563EB]/20 text-[#2563EB] dark:text-[#3B82F6]">
                 {trend === 'up' && <TrendingUp className="w-3 h-3 mr-1" />}
                 {trend === 'down' && <TrendingDown className="w-3 h-3 mr-1" />}
-                {change}
+                {t(change)}
               </span>
             )}
           </div>
-          {subtitle && <p className="text-xs text-[#1E293B] dark:text-zinc-400 mt-1.5 font-medium">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-[#1E293B] dark:text-zinc-400 mt-1.5 font-medium">{t(subtitle)}</p>}
         </div>
 
         <div className={`p-2.5 rounded-2xl ${theme.iconBox} shadow-sm shrink-0`}>

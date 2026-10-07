@@ -17,7 +17,7 @@ const PRESET_WALLPAPERS = [
 ];
 
 export const SettingsPage: React.FC = () => {
-  const { isDarkMode, toggleDarkMode, addToast } = useApp();
+  const { isDarkMode, toggleDarkMode, addToast, t } = useApp();
   const { theme, wallpaperUrl, savePreferences } = useCustomization();
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [localTheme, setLocalTheme] = useState(theme);
@@ -43,7 +43,7 @@ export const SettingsPage: React.FC = () => {
     setIsUploading(true);
     try {
       const token = localStorage.getItem('smart_att_token');
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/+$/, '');
+      const apiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api').replace(/\/+$/, '');
       const backendBase = apiBase.replace('/api', '');
       const res = await fetch(`${apiBase}/upload`, {
         method: 'POST',
@@ -67,7 +67,7 @@ export const SettingsPage: React.FC = () => {
       <BackButton />
       <div className="pb-2 border-b border-[#E2E8F0] dark:border-zinc-800">
         <h2 className="text-lg font-bold text-[#0F172A] dark:text-zinc-100 tracking-tight flex items-center gap-2">
-          <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Settings & Customization
+          <Settings className="w-5 h-5 text-blue-600 dark:text-blue-400" /> {t('settings.title', 'Settings & Customization')}
         </h2>
       </div>
 
@@ -76,27 +76,27 @@ export const SettingsPage: React.FC = () => {
         {/* Left Column - Customization */}
         <div className="bg-white dark:bg-[#0A0A0A] border border-[#E2E8F0]/80 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-6">
           <h3 className="text-sm font-bold text-[#0F172A] dark:text-zinc-100 flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-zinc-800">
-            <Palette className="w-4 h-4 text-blue-600" /> Theme Selection
+            <Palette className="w-4 h-4 text-blue-600" /> {t('settings.themeSelection', 'Theme Selection')}
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {THEMES.map((t) => (
+            {THEMES.map((th) => (
               <button
-                key={t}
-                onClick={() => setLocalTheme(t as any)}
+                key={th}
+                onClick={() => setLocalTheme(th as any)}
                 className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold transition-all ${
-                  localTheme === t 
+                  localTheme === th 
                     ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-400 dark:text-blue-300' 
                     : 'border-gray-200 text-gray-700 hover:border-gray-300 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700'
                 }`}
               >
-                {t}
-                {localTheme === t && <Check className="w-3 h-3" />}
+                {th}
+                {localTheme === th && <Check className="w-3 h-3" />}
               </button>
             ))}
           </div>
 
           <h3 className="text-sm font-bold text-[#0F172A] dark:text-zinc-100 flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-zinc-800 pt-4">
-            <ImageIcon className="w-4 h-4 text-blue-600" /> Wallpaper
+            <ImageIcon className="w-4 h-4 text-blue-600" /> {t('settings.wallpaperCustomization', 'Wallpaper Customization')}
           </h3>
           
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -149,25 +149,25 @@ export const SettingsPage: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-[#0F172A] dark:text-zinc-100 flex items-center gap-2">
                 {isDarkMode ? <Moon className="w-4 h-4 text-blue-600" /> : <Sun className="w-4 h-4 text-blue-600" />}
-                Interface Appearance
+                {t('settings.displayPreferences', 'Interface Appearance')}
               </h3>
-              <p className="text-xs text-gray-500 mt-1">Toggle between Dark Mode and Light Mode</p>
+              <p className="text-xs text-gray-500 mt-1">{t('Toggle between Dark Mode and Light Mode', 'Toggle between Dark Mode and Light Mode')}</p>
             </div>
             <button
               onClick={toggleDarkMode}
               className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-800 dark:text-white rounded-lg font-bold text-xs transition-all shadow-sm flex items-center gap-2"
             >
               {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-              {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+              {isDarkMode ? t('Light Mode', 'Light Mode') : t('Dark Mode', 'Dark Mode')}
             </button>
           </div>
 
           <div className="space-y-4 pb-5 border-b border-[#E2E8F0] dark:border-zinc-800">
             <h3 className="text-sm font-bold text-[#0F172A] dark:text-zinc-100 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-blue-600" /> Notifications
+              <Bell className="w-4 h-4 text-blue-600" /> {t('notifications.title', 'Notifications')}
             </h3>
             <label className="flex items-center justify-between text-xs cursor-pointer">
-              <span className="text-[#1E293B] dark:text-zinc-300 font-semibold">Email Alerts for Low Attendance</span>
+              <span className="text-[#1E293B] dark:text-zinc-300 font-semibold">{t('Email Alerts for Low Attendance', 'Email Alerts for Low Attendance')}</span>
               <input
                 type="checkbox"
                 checked={emailAlerts}
@@ -181,7 +181,7 @@ export const SettingsPage: React.FC = () => {
             onClick={handleSave}
             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
           >
-            <Check className="w-4 h-4" /> Save All Preferences
+            <Check className="w-4 h-4" /> {t('settings.savePreferences', 'Save All Preferences')}
           </button>
         </div>
 
